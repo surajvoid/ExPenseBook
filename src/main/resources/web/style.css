@@ -271,12 +271,34 @@ h1, h2, h3, h4 {
     color: var(--sidebar-text);
 }
 
-/* Window Control Dots */
+/* Window Control Dots & Close button */
 .sidebar-window-dots {
     display: flex;
-    gap: 7px;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 8px;
     padding-left: 6px;
+    padding-right: 4px;
+}
+.sidebar-close-btn {
+    display: none;
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    color: #FFFFFF;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+.sidebar-close-btn:active {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(0.92);
+}
+.sidebar-overlay {
+    display: none;
 }
 .window-dot {
     width: 11px;
@@ -630,6 +652,59 @@ h1, h2, h3, h4 {
         opacity: 1;
         transform: translateY(0) scale(1);
     }
+}
+
+/* Compact form row for 2 inputs side by side */
+.form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+/* Sticky Modal Actions Footer Bar (Always visible & accessible) */
+.modal-actions-bar {
+    position: sticky;
+    bottom: -1px;
+    background: #FFFFFF;
+    padding: 14px 0 4px 0;
+    margin-top: 18px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    border-top: 1px solid #EEF3F0;
+    z-index: 10;
+}
+
+.modal-btn-cancel {
+    flex: 0 0 auto;
+    min-height: 48px;
+    padding: 10px 20px;
+    border-radius: 14px;
+    font-weight: 600;
+}
+
+.modal-btn-save {
+    flex: 1;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    background: #0D382B !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 14px rgba(13, 56, 43, 0.28);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.12s ease, background-color 0.15s ease;
+}
+
+.modal-btn-save:active {
+    transform: scale(0.97);
+    background: #154D3C !important;
 }
 
 /* =========================================================
@@ -1242,31 +1317,51 @@ h1, h2, h3, h4 {
     /* Off-Canvas Sidebar */
     .sidebar {
         position: fixed;
-        left: -280px;
+        left: -300px;
         top: 0;
         bottom: 0;
-        width: 270px;
+        width: 280px;
+        max-width: 85vw;
+        height: 100vh;
+        height: 100dvh;
         z-index: 10000;
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+        box-shadow: 4px 0 28px rgba(0, 0, 0, 0.35);
         transition: left 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        touch-action: pan-y;
     }
 
     .sidebar.open {
-        left: 0;
+        left: 0 !important;
+    }
+
+    .sidebar-close-btn {
+        display: inline-flex !important;
     }
 
     /* Backdrop when sidebar open */
     .sidebar-overlay {
         display: none;
         position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.45);
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        background: rgba(0, 0, 0, 0.55);
         backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
         z-index: 9999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .sidebar.open ~ .sidebar-overlay {
-        display: block;
+    .sidebar-overlay.active {
+        display: block !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
     }
 
     /* Main Content container */
@@ -1398,10 +1493,19 @@ h1, h2, h3, h4 {
         border-radius: 24px 24px 0 0 !important;
         max-height: 88vh !important;
         overflow-y: auto !important;
-        padding: 18px 20px calc(24px + env(safe-area-inset-bottom)) 20px !important;
+        padding: 18px 20px 0 20px !important;
         margin: 0 !important;
         box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.25) !important;
         animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .modal-actions-bar {
+        position: sticky !important;
+        bottom: 0 !important;
+        background: #FFFFFF !important;
+        padding: 12px 0 calc(18px + env(safe-area-inset-bottom)) 0 !important;
+        margin-top: 14px !important;
+        z-index: 20 !important;
     }
 
     @keyframes slideUpSheet {
@@ -1900,3 +2004,40 @@ img {
 .app-splash-loader {
     display: none !important;
 }
+
+/* Zero-Flash Authentication State Styles */
+html.user-logged-in #auth-container {
+    display: none !important;
+}
+html.user-logged-in #app-container {
+    display: flex !important;
+}
+html:not(.user-logged-in) #app-container {
+    display: none !important;
+}
+html:not(.user-logged-in) #auth-container {
+    display: flex !important;
+}
+
+/* Native Mobile App Touch & Momentum Scroll Polish */
+html, body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: none;
+}
+
+.main-content, .modal-content, .nav-links {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+}
+
+button, .btn, .nav-item, .mobile-nav-item, .auth-tab-btn, .card {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+button:active, .btn:active, .mobile-nav-item:active, .dash-cat-card:active {
+    transform: scale(0.97);
+    transition: transform 0.08s ease;
+}
+

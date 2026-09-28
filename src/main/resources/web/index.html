@@ -12,14 +12,28 @@
     <link rel="apple-touch-icon" href="/logo.png">
     <title>ExPense Book — Spend Smart • Live Better</title>
     <link rel="icon" type="image/png" href="/logo.png">
-    <link rel="stylesheet" href="/style.css?v=5">
+    <link rel="stylesheet" href="/style.css?v=6">
     <!-- Chart.js for beautiful interactive analytics and spending trend charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <!-- Fail-safe image constraints -->
+    <script>
+        (function() {
+            try {
+                if (localStorage.getItem('eb_token')) {
+                    document.documentElement.classList.add('user-logged-in');
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <!-- Instant layout rules to prevent any flash of login or unstyled content -->
     <style>
         img { max-width: 100%; height: auto; }
         .auth-logo { width: 56px !important; height: 56px !important; max-width: 56px !important; }
         .brand-logo-img { width: 36px !important; height: 36px !important; max-width: 36px !important; }
+
+        /* Instant zero-flash authentication switching */
+        html.user-logged-in #auth-container { display: none !important; }
+        html.user-logged-in #app-container { display: flex !important; }
+        html:not(.user-logged-in) #app-container { display: none !important; }
     </style>
 </head>
 
@@ -30,8 +44,8 @@
         <span>📡 You are currently offline. Running in offline resilient mode with cached data.</span>
     </div>
 
-        <!-- Auth / Login Container (Direct Clean Landing) -->
-    <div id="auth-container" class="auth-wrapper" style="display: flex;">
+    <!-- Auth / Login Container (Direct Clean Landing) -->
+    <div id="auth-container" class="auth-wrapper">
         <div class="auth-card">
             <div class="auth-header">
                 <img src="/logo.png" alt="ExPense Book Logo" class="auth-logo" width="56" height="56" style="width: 56px; height: 56px; max-width: 56px; border-radius: 14px; object-fit: contain; margin: 0 auto 12px; display: block; box-shadow: 0 4px 14px rgba(13, 56, 43, 0.15);">
@@ -136,13 +150,19 @@
     </div>
 
     <!-- Main App Layout (Hidden until authenticated) -->
-    <div id="app-container" style="display: none;">
+    <div id="app-container">
+        <!-- Mobile Sidebar Backdrop Overlay -->
+        <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeMobileSidebar()"></div>
+
         <!-- Left Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-window-dots">
-                <span class="window-dot dot-red"></span>
-                <span class="window-dot dot-yellow"></span>
-                <span class="window-dot dot-green"></span>
+                <div style="display: flex; gap: 7px; align-items: center;">
+                    <span class="window-dot dot-red"></span>
+                    <span class="window-dot dot-yellow"></span>
+                    <span class="window-dot dot-green"></span>
+                </div>
+                <button type="button" class="sidebar-close-btn" onclick="closeMobileSidebar()" aria-label="Close navigation menu">✕</button>
             </div>
 
             <div class="brand-header">
@@ -152,18 +172,18 @@
             </div>
 
             <ul class="nav-links">
-                <li class="nav-item active" onclick="navigate('dashboard')">Dashboard</li>
-                <li class="nav-item" onclick="openExpenseModal()">Add Expense</li>
-                <li class="nav-item" onclick="navigate('transactions')">Transactions</li>
-                <li class="nav-item" onclick="navigate('calendar')">Calendar</li>
-                <li class="nav-item" onclick="navigate('analytics')">Analytics</li>
-                <li class="nav-item" id="nav-item-budget" onclick="navigate('budget')">Budget</li>
-                <li class="nav-item" onclick="navigate('income')">Income</li>
-                <li class="nav-item" onclick="navigate('recurring')">Recurring</li>
-                <li class="nav-item" onclick="navigate('reports')">Reports</li>
-                <li class="nav-item" onclick="navigate('ai-assistant')">✨ AI Assistant</li>
-                <li class="nav-item" onclick="navigate('settings')">Settings</li>
-                <li class="nav-item" id="nav-item-admin" onclick="navigate('admin')" style="display: none;">Admin Panel
+                <li class="nav-item active" onclick="navigate('dashboard'); closeMobileSidebar();">Dashboard</li>
+                <li class="nav-item" onclick="openExpenseModal(); closeMobileSidebar();">Add Expense</li>
+                <li class="nav-item" onclick="navigate('transactions'); closeMobileSidebar();">Transactions</li>
+                <li class="nav-item" onclick="navigate('calendar'); closeMobileSidebar();">Calendar</li>
+                <li class="nav-item" onclick="navigate('analytics'); closeMobileSidebar();">Analytics</li>
+                <li class="nav-item" id="nav-item-budget" onclick="navigate('budget'); closeMobileSidebar();">Budget</li>
+                <li class="nav-item" onclick="navigate('income'); closeMobileSidebar();">Income</li>
+                <li class="nav-item" onclick="navigate('recurring'); closeMobileSidebar();">Recurring</li>
+                <li class="nav-item" onclick="navigate('reports'); closeMobileSidebar();">Reports</li>
+                <li class="nav-item" onclick="navigate('ai-assistant'); closeMobileSidebar();">✨ AI Assistant</li>
+                <li class="nav-item" onclick="navigate('settings'); closeMobileSidebar();">Settings</li>
+                <li class="nav-item" id="nav-item-admin" onclick="navigate('admin'); closeMobileSidebar();" style="display: none;">Admin Panel
                 </li>
             </ul>
 
@@ -1181,8 +1201,8 @@
                 <div class="modal-drag-handle"></div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3 id="modal-expense-title">Record Expense</h3>
-                    <button onclick="closeExpenseModal()"
-                        style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted);" aria-label="Close">✕</button>
+                    <button type="button" onclick="closeExpenseModal()"
+                        style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" aria-label="Close">✕</button>
                 </div>
                 <form onsubmit="handleSaveExpense(event)">
                     <input type="hidden" id="modal-expense-id">
@@ -1195,29 +1215,33 @@
                         <label class="form-label">Category</label>
                         <select id="modal-expense-category" class="form-select" required></select>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Payment Method</label>
-                        <select id="modal-expense-payment" class="form-select" required>
-                            <option value="UPI">UPI</option>
-                            <option value="Cash">Cash</option>
-                            <option value="Debit Card">Debit Card</option>
-                            <option value="Credit Card">Credit Card</option>
-                            <option value="Net Banking">Net Banking</option>
-                            <option value="Wallet">Wallet</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Expense Date</label>
-                        <input type="date" id="modal-expense-date" class="form-input" required>
+                    <div class="form-row-2">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Payment Method</label>
+                            <select id="modal-expense-payment" class="form-select" required>
+                                <option value="UPI">UPI</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Debit Card">Debit Card</option>
+                                <option value="Credit Card">Credit Card</option>
+                                <option value="Net Banking">Net Banking</option>
+                                <option value="Wallet">Wallet</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Expense Date</label>
+                            <input type="date" id="modal-expense-date" class="form-input" required>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Description / Note</label>
                         <input type="text" id="modal-expense-desc" class="form-input"
                             placeholder="Optional (defaults to selected category)">
                     </div>
-                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px;">
-                        <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancel</button>
-                        <button type="submit" class="btn btn-primary" id="modal-btn-submit">Save Expense</button>
+                    <div class="modal-actions-bar">
+                        <button type="button" class="btn btn-secondary modal-btn-cancel" onclick="closeExpenseModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary modal-btn-save" id="modal-btn-submit">
+                            <span>✓</span> Save Expense
+                        </button>
                     </div>
                 </form>
             </div>
@@ -1263,6 +1287,6 @@
     </div> <!-- end app-container -->
 
     <!-- Application Script -->
-    <script src="/app.js?v=5"></script>
+    <script src="/app.js?v=6"></script>
 </body>
 </html>

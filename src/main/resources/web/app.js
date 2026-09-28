@@ -75,6 +75,32 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') closeExpenseModal();
     });
 
+    // Mobile Sidebar Swipe-to-Close Touch Gestures
+    const sidebarEl = document.getElementById('sidebar');
+    if (sidebarEl) {
+        let touchStartX = 0;
+        let touchStartY = 0;
+        sidebarEl.addEventListener('touchstart', (e) => {
+            if (e.touches && e.touches[0]) {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+
+        sidebarEl.addEventListener('touchmove', (e) => {
+            if (e.touches && e.touches[0]) {
+                const touchEndX = e.touches[0].clientX;
+                const touchEndY = e.touches[0].clientY;
+                const diffX = touchEndX - touchStartX;
+                const diffY = touchEndY - touchStartY;
+                // If swiped left by > 36px and mostly horizontal
+                if (diffX < -36 && Math.abs(diffX) > Math.abs(diffY)) {
+                    closeMobileSidebar();
+                }
+            }
+        }, { passive: true });
+    }
+
     // Register Service Worker for PWA / offline resilience
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(err => {
@@ -102,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initApp() {
     const splash = document.getElementById('app-splash-loader');
     if (currentToken) {
+        document.documentElement.classList.add('user-logged-in');
         try {
             const resp = await apiFetch('/api/auth/current');
             if (resp && resp.user) {
@@ -118,8 +145,10 @@ async function initApp() {
             localStorage.removeItem('eb_token');
             currentToken = null;
             currentUser = null;
+            document.documentElement.classList.remove('user-logged-in');
         }
     }
+    document.documentElement.classList.remove('user-logged-in');
     if (splash) {
         splash.style.opacity = '0';
         setTimeout(() => { splash.style.display = 'none'; }, 300);
@@ -237,6 +266,7 @@ function togglePasswordVisibility(inputId, btn) {
 }
 
 function showAuthUI() {
+    document.documentElement.classList.remove('user-logged-in');
     const splash = document.getElementById('app-splash-loader');
     if (splash) splash.style.display = 'none';
 
@@ -257,6 +287,7 @@ function showAuthUI() {
 }
 
 function showAppUI() {
+    document.documentElement.classList.add('user-logged-in');
     const splash = document.getElementById('app-splash-loader');
     if (splash) splash.style.display = 'none';
 
@@ -494,8 +525,7 @@ function navigate(viewName) {
     });
 
     // Close mobile sidebar if open
-    const sidebar = document.getElementById('sidebar');
-    if (sidebar) sidebar.classList.remove('open');
+    closeMobileSidebar();
 
     // Trigger view-specific loads
     switch (viewName) {
@@ -535,9 +565,29 @@ function navigate(viewName) {
     }
 }
 
+function openMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.add('open');
+    if (overlay) overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMobileSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
 function toggleMobileSidebar() {
     const sidebar = document.getElementById('sidebar');
-    if (sidebar) sidebar.classList.toggle('open');
+    if (sidebar && sidebar.classList.contains('open')) {
+        closeMobileSidebar();
+    } else {
+        openMobileSidebar();
+    }
 }
 
 // --- Dashboard View ---
@@ -926,6 +976,9 @@ async function openExpenseModal(expenseToEdit = null) {
 
     modal.classList.add('open');
     modal.style.display = 'flex';
+    if (window.innerWidth <= 900) {
+        document.body.style.overflow = 'hidden';
+    }
     setTimeout(() => {
         if (amtInput) amtInput.focus();
     }, 60);
@@ -936,6 +989,7 @@ function closeExpenseModal() {
     if (modal) {
         modal.classList.remove('open');
         modal.style.display = 'none';
+        document.body.style.overflow = '';
     }
 }
 

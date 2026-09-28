@@ -1,9 +1,9 @@
-const CACHE_NAME = 'expensebook-cache-v5';
+const CACHE_NAME = 'expensebook-cache-v6';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=5',
-  '/app.js?v=5',
+  '/style.css?v=6',
+  '/app.js?v=6',
   '/logo.png',
   '/brand-wordmark-dark.png',
   '/brand-wordmark-light.png',
