@@ -2012,12 +2012,6 @@ html.user-logged-in #auth-container {
 html.user-logged-in #app-container {
     display: flex !important;
 }
-html:not(.user-logged-in) #app-container {
-    display: none !important;
-}
-html:not(.user-logged-in) #auth-container {
-    display: flex !important;
-}
 
 /* Native Mobile App Touch & Momentum Scroll Polish */
 html, body {

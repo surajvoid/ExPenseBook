@@ -12,7 +12,7 @@
     <link rel="apple-touch-icon" href="/logo.png">
     <title>ExPense Book — Spend Smart • Live Better</title>
     <link rel="icon" type="image/png" href="/logo.png">
-    <link rel="stylesheet" href="/style.css?v=6">
+    <link rel="stylesheet" href="/style.css?v=7">
     <!-- Chart.js for beautiful interactive analytics and spending trend charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
@@ -33,7 +33,6 @@
         /* Instant zero-flash authentication switching */
         html.user-logged-in #auth-container { display: none !important; }
         html.user-logged-in #app-container { display: flex !important; }
-        html:not(.user-logged-in) #app-container { display: none !important; }
     </style>
 </head>
 
@@ -150,7 +149,7 @@
     </div>
 
     <!-- Main App Layout (Hidden until authenticated) -->
-    <div id="app-container">
+    <div id="app-container" style="display: none;">
         <!-- Mobile Sidebar Backdrop Overlay -->
         <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeMobileSidebar()"></div>
 
@@ -1287,6 +1286,6 @@
     </div> <!-- end app-container -->
 
     <!-- Application Script -->
-    <script src="/app.js?v=6"></script>
+    <script src="/app.js?v=7"></script>
 </body>
 </html>
