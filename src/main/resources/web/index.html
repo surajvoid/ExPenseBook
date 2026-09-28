@@ -19,124 +19,112 @@
 
 <body>
 
+    <!-- App Splash Loader (Prevents flash of protected screens) -->
+    <div id="app-splash-loader" class="app-splash-loader">
+        <div class="splash-card">
+            <img src="/logo.png" alt="ExPense Book Logo" class="splash-logo">
+            <div class="splash-title">ExPense Book</div>
+            <div class="splash-subtitle">Spend Smart • Live Better</div>
+            <div class="splash-spinner"></div>
+        </div>
+    </div>
+
     <!-- Offline Notification Banner -->
     <div id="offline-banner" class="offline-banner" style="display: none;">
         <span>📡 You are currently offline. Running in offline resilient mode with cached data.</span>
     </div>
 
-    <!-- Auth / Onboarding Container -->
-    <div id="auth-container"
-        style="display: flex; align-items: center; justify-content: center; min-height: 100vh; width: 100vw; padding: 20px;">
-        <!-- Step 1: Welcome -->
-        <div id="step-welcome" class="card"
-            style="max-width: 520px; width: 100%; text-align: center; padding: 36px 28px;">
-            <img src="/logo.png" alt="ExPense Book Logo"
-                style="width: 72px; height: 72px; border-radius: 16px; object-fit: contain; margin: 0 auto 16px; display: block; box-shadow: 0 4px 14px rgba(13, 56, 43, 0.15);">
-            <img src="/brand-wordmark-dark.png" alt="ExPense Book — Spend Smart • Live Better"
-                style="height: 52px; max-width: 88%; margin: 0 auto 14px; display: block; object-fit: contain;">
-            <div style="display: flex; gap: 14px; justify-content: center;">
-                <button class="btn btn-primary" onclick="showOnboardingStep(2)" style="padding: 12px 28px;">Get Started
-                    →</button>
-                <button class="btn btn-secondary" onclick="showLogin()" style="padding: 12px 24px;">Sign In</button>
-            </div>
-        </div>
-
-        <!-- Step 2: Register -->
-        <div id="step-register" class="card" style="max-width: 440px; width: 100%; display: none; padding: 32px 26px;">
-            <h2 style="margin-bottom: 4px;">Create Account</h2>
-            <p class="text-muted" style="margin-bottom: 20px;">Sign up to begin your personalized financial journey.</p>
-            <div id="register-error" class="badge badge-coral"
-                style="display: none; margin-bottom: 12px; width: 100%; justify-content: center; padding: 8px;"></div>
-
-            <form onsubmit="handleRegisterSubmit(event)">
-                <div class="form-group">
-                    <label class="form-label">Full Name</label>
-                    <input type="text" id="reg-name" class="form-input" placeholder="" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Email Address</label>
-                    <input type="email" id="reg-email" class="form-input" placeholder="" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" id="reg-pass" class="form-input" placeholder="At least 6 characters" required
-                        minlength="6">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Confirm Password</label>
-                    <input type="password" id="reg-conf-pass" class="form-input" placeholder="Re-enter password"
-                        required>
-                </div>
-                <button type="submit" class="btn btn-primary"
-                    style="width: 100%; padding: 12px; margin-top: 8px;">Continue →</button>
-            </form>
-            <p style="text-align: center; margin-top: 18px; font-size: 0.85rem;">
-                Already have an account? <a href="javascript:void(0)" onclick="showLogin()"
-                    style="color: #5FA787; font-weight: 700; text-decoration: none;">Login</a>
-            </p>
-        </div>
-
-        <!-- Step 3: Personalization Mode Selection -->
-        <div id="step-personalize" class="card"
-            style="max-width: 600px; width: 100%; display: none; padding: 32px 26px; text-align: center;">
-            <h2 style="margin-bottom: 6px;">How do you want to use ExPense Book?</h2>
-            <p class="text-muted" style="margin-bottom: 24px;">Choose the experience that fits your goals. You can
-                change this anytime from Settings.</p>
-
-            <div class="grid-2" style="margin-bottom: 24px; text-align: left;">
-                <div id="mode-opt-track" class="card" onclick="selectPersonalizeMode('TRACK_ONLY')"
-                    style="border: 2px solid #78BFA0; cursor: pointer;">
-                    <h3 style="font-size: 1rem; margin-bottom: 4px;">Just Track Expenses</h3>
-                    <p class="text-muted" style="font-size: 0.8rem; line-height: 1.5; margin-bottom: 12px;">Record and
-                        analyse your spending without setting a budget. Clean, simple, and distraction-free.</p>
-                    <span class="badge badge-sage">Track Only</span>
-                </div>
-                <div id="mode-opt-budget" class="card" onclick="selectPersonalizeMode('TRACK_AND_BUDGET')"
-                    style="border: 1px solid var(--border-color); cursor: pointer;">
-                    <h3 style="font-size: 1rem; margin-bottom: 4px;">Track + Monthly Budget</h3>
-                    <p class="text-muted" style="font-size: 0.8rem; line-height: 1.5; margin-bottom: 12px;">Track
-                        expenses, set monthly spending limits, get smart daily recommendations &amp; projections.</p>
-                    <span class="badge badge-blue">Track + Budget</span>
-                </div>
+    <!-- Auth / Onboarding Container (Strictly public) -->
+    <div id="auth-container" class="auth-container" style="display: none;">
+        <div class="auth-card">
+            <div class="auth-header">
+                <img src="/logo.png" alt="ExPense Book Logo" class="auth-logo">
+                <h1 class="auth-title">ExPense Book</h1>
+                <p class="auth-tagline">Spend Smart • Live Better</p>
             </div>
 
-            <button class="btn btn-primary" onclick="finalizePersonalization()" style="padding: 12px 36px;">Launch
-                Dashboard →</button>
-        </div>
-
-        <!-- Login Form -->
-        <div id="step-login" class="card" style="max-width: 420px; width: 100%; display: none; padding: 32px 26px;">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <img src="/logo.png" alt="ExPense Book Logo"
-                    style="width: 56px; height: 56px; border-radius: 12px; object-fit: contain; margin: 0 auto 12px; display: block; box-shadow: 0 3px 10px rgba(13, 56, 43, 0.12);">
-                <img src="/brand-wordmark-dark.png" alt="ExPense Book"
-                    style="height: 38px; max-width: 85%; margin: 0 auto 10px; display: block; object-fit: contain;">
-                <p class="text-muted">Sign in to your ExPense Book account</p>
+            <!-- Segmented Auth Switcher -->
+            <div class="auth-tab-switch" id="auth-tab-switch">
+                <button type="button" id="tab-login-btn" class="auth-tab active" onclick="showAuthTab('login')">Sign In</button>
+                <button type="button" id="tab-register-btn" class="auth-tab" onclick="showAuthTab('register')">Create Account</button>
             </div>
-            <div id="login-error" class="badge badge-coral"
-                style="display: none; margin-bottom: 12px; width: 100%; justify-content: center; padding: 8px;"></div>
 
-            <form onsubmit="handleLoginSubmit(event)">
+            <div id="auth-error-banner" class="auth-error-banner" style="display: none;"></div>
+
+            <!-- Login Form -->
+            <form id="form-login" onsubmit="handleLoginSubmit(event)">
                 <div class="form-group">
-                    <label class="form-label">Email Address</label>
-                    <input type="email" id="login-email" class="form-input" placeholder="Enter your email" required>
+                    <label class="form-label" for="login-email">Email Address</label>
+                    <input type="email" id="login-email" class="form-input" placeholder="name@example.com" autocomplete="email" inputmode="email" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Password</label>
-                    <input type="password" id="login-pass" class="form-input" placeholder="Enter your password"
-                        required>
+                    <label class="form-label" for="login-pass">Password</label>
+                    <div class="password-input-wrap">
+                        <input type="password" id="login-pass" class="form-input" placeholder="Enter your password" autocomplete="current-password" required>
+                        <button type="button" class="pwd-toggle-btn" onclick="togglePasswordVisibility('login-pass', this)" aria-label="Toggle password visibility" tabindex="-1">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; margin-top: 8px;">Sign
-                    In</button>
+                <button type="submit" id="btn-login-submit" class="btn btn-primary btn-auth-submit">Sign In →</button>
+
+                <div style="margin-top: 14px; text-align: center;">
+                    <button type="button" class="btn btn-secondary btn-small" onclick="fillAdminCredentials()" style="width: 100%;">⚡ Fill Demo Admin Account</button>
+                </div>
             </form>
 
-            <div
-                style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-color); text-align: center;">
-                <button class="btn btn-secondary btn-small" onclick="fillAdminCredentials()"
-                    style="width: 100%; margin-bottom: 10px;">Fill Admin Credentials</button>
-                <p style="font-size: 0.85rem;">New to ExPense Book? <a href="javascript:void(0)"
-                        onclick="showOnboardingStep(1)"
-                        style="color: #5FA787; font-weight: 700; text-decoration: none;">Get Started</a></p>
+            <!-- Register Form -->
+            <form id="form-register" onsubmit="handleRegisterSubmit(event)" style="display: none;">
+                <div class="form-group">
+                    <label class="form-label" for="reg-name">Full Name</label>
+                    <input type="text" id="reg-name" class="form-input" placeholder="Your name" autocomplete="name" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reg-email">Email Address</label>
+                    <input type="email" id="reg-email" class="form-input" placeholder="name@example.com" autocomplete="email" inputmode="email" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reg-pass">Password</label>
+                    <div class="password-input-wrap">
+                        <input type="password" id="reg-pass" class="form-input" placeholder="At least 6 characters" minlength="6" autocomplete="new-password" required>
+                        <button type="button" class="pwd-toggle-btn" onclick="togglePasswordVisibility('reg-pass', this)" aria-label="Toggle password visibility" tabindex="-1">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="reg-conf-pass">Confirm Password</label>
+                    <div class="password-input-wrap">
+                        <input type="password" id="reg-conf-pass" class="form-input" placeholder="Re-enter password" minlength="6" autocomplete="new-password" required>
+                        <button type="button" class="pwd-toggle-btn" onclick="togglePasswordVisibility('reg-conf-pass', this)" aria-label="Toggle password visibility" tabindex="-1">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" id="btn-register-submit" class="btn btn-primary btn-auth-submit">Continue →</button>
+            </form>
+
+            <!-- Mode Selection (Post-registration) -->
+            <div id="step-personalize" style="display: none; text-align: center;">
+                <h2 style="font-size: 1.25rem; margin-bottom: 6px; color: #0D382B;">Choose Financial Mode</h2>
+                <p class="text-muted" style="font-size: 0.82rem; margin-bottom: 18px;">You can change this anytime from Settings.</p>
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; text-align: left;">
+                    <div id="mode-opt-track" class="personalize-card selected" onclick="selectPersonalizeMode('TRACK_ONLY')">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-weight: 700; font-size: 0.95rem; color: #0D382B;">Just Track Expenses</span>
+                            <span class="badge badge-sage">Track Only</span>
+                        </div>
+                        <div class="text-muted" style="font-size: 0.78rem; line-height: 1.4;">Log &amp; analyze spending without setting monthly budget caps. Clean and simple.</div>
+                    </div>
+                    <div id="mode-opt-budget" class="personalize-card" onclick="selectPersonalizeMode('TRACK_AND_BUDGET')">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-weight: 700; font-size: 0.95rem; color: #0D382B;">Track + Monthly Budget</span>
+                            <span class="badge badge-blue">Track + Budget</span>
+                        </div>
+                        <div class="text-muted" style="font-size: 0.78rem; line-height: 1.4;">Set monthly budgets, category targets, and get daily spending recommendations.</div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary btn-auth-submit" onclick="finalizePersonalization()">Launch Dashboard →</button>
             </div>
         </div>
     </div>
@@ -1135,115 +1123,140 @@
 
             </div>
         </main>
-    </div>
+        <!-- Mobile Bottom Navigation (Strictly inside app-container) -->
+        <nav class="mobile-nav-bottom" id="mobile-nav-bottom">
+            <button type="button" class="mobile-nav-item active" onclick="navigate('dashboard')" id="mob-nav-dashboard">
+                <svg class="nav-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9.5L12 2.5L21 9.5V20C21 20.6 20.6 21 20 21H4C3.4 21 3 20.6 3 20V9.5Z"/>
+                    <path d="M9 21V12H15V21"/>
+                </svg>
+                <span class="nav-label">Home</span>
+            </button>
+            <button type="button" class="mobile-nav-item" onclick="navigate('transactions')" id="mob-nav-transactions">
+                <svg class="nav-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="16" rx="2"/>
+                    <line x1="7" y1="8" x2="17" y2="8"/>
+                    <line x1="7" y1="12" x2="17" y2="12"/>
+                    <line x1="7" y1="16" x2="13" y2="16"/>
+                </svg>
+                <span class="nav-label">Activity</span>
+            </button>
+            <button type="button" class="mobile-nav-item mobile-nav-center" onclick="openExpenseModal()" title="Add Expense">
+                <div class="mobile-nav-add-btn">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </div>
+                <span class="nav-label">Add</span>
+            </button>
+            <button type="button" class="mobile-nav-item" onclick="navigate('calendar')" id="mob-nav-calendar">
+                <svg class="nav-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span class="nav-label">Calendar</span>
+            </button>
+            <button type="button" class="mobile-nav-item" onclick="navigate('analytics')" id="mob-nav-analytics">
+                <svg class="nav-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"/>
+                    <line x1="12" y1="20" x2="12" y2="4"/>
+                    <line x1="6" y1="20" x2="6" y2="14"/>
+                </svg>
+                <span class="nav-label">Insights</span>
+            </button>
+        </nav>
 
-    <!-- Mobile Bottom Navigation -->
-    <nav class="mobile-nav-bottom">
-        <a href="javascript:void(0)" class="mobile-nav-item active" onclick="navigate('dashboard')">
-            <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
-        </a>
-        <a href="javascript:void(0)" class="mobile-nav-item mobile-nav-add" onclick="openExpenseModal()">
-            <span class="nav-icon">➕</span><span class="nav-label">Add</span>
-        </a>
-        <a href="javascript:void(0)" class="mobile-nav-item" onclick="navigate('transactions')">
-            <span class="nav-icon">📜</span><span class="nav-label">Activity</span>
-        </a>
-        <a href="javascript:void(0)" class="mobile-nav-item" onclick="navigate('calendar')">
-            <span class="nav-icon">📅</span><span class="nav-label">Calendar</span>
-        </a>
-        <a href="javascript:void(0)" class="mobile-nav-item" onclick="navigate('analytics')">
-            <span class="nav-icon">📊</span><span class="nav-label">Insights</span>
-        </a>
-    </nav>
-
-    <!-- Modal: Add / Edit Expense -->
-    <div id="expense-modal" class="modal-backdrop">
-        <div class="modal-content">
-            <div class="modal-drag-handle"></div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h3 id="modal-expense-title">Record Expense</h3>
-                <button onclick="closeExpenseModal()"
-                    style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted);">✕</button>
-            </div>
-            <form onsubmit="handleSaveExpense(event)">
-                <input type="hidden" id="modal-expense-id">
-                <div class="form-group">
-                    <label class="form-label">Amount (₹)</label>
-                    <input type="number" step="0.01" id="modal-expense-amount" class="form-input" placeholder="0.00"
-                        required style="font-size: 1.3rem; font-weight: 700;">
+        <!-- Modal: Add / Edit Expense (Inside app-container) -->
+        <div id="expense-modal" class="modal-backdrop">
+            <div class="modal-content">
+                <div class="modal-drag-handle"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 id="modal-expense-title">Record Expense</h3>
+                    <button onclick="closeExpenseModal()"
+                        style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted);" aria-label="Close">✕</button>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Category</label>
-                    <select id="modal-expense-category" class="form-select" required></select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Payment Method</label>
-                    <select id="modal-expense-payment" class="form-select" required>
-                        <option value="UPI">UPI</option>
-                        <option value="Cash">Cash</option>
-                        <option value="Debit Card">Debit Card</option>
-                        <option value="Credit Card">Credit Card</option>
-                        <option value="Net Banking">Net Banking</option>
-                        <option value="Wallet">Wallet</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Expense Date</label>
-                    <input type="date" id="modal-expense-date" class="form-input" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Description / Note</label>
-                    <input type="text" id="modal-expense-desc" class="form-input"
-                        placeholder="Optional (defaults to selected category)">
-                </div>
-                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px;">
-                    <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary" id="modal-btn-submit">Save Expense</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Floating AI Assistant FAB -->
-    <div id="ai-floating-fab" class="ai-floating-fab" onclick="toggleFloatingAi()" title="Ask PennyWise AI" style="display: none;">
-        <span class="ai-fab-sparkle">✨</span>
-        <span class="ai-fab-text">Ask AI</span>
-    </div>
-
-    <!-- Floating AI Drawer Window -->
-    <div id="ai-floating-drawer" class="ai-floating-drawer" style="display: none;">
-        <div class="ai-drawer-header">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 1.2rem;">✨</span>
-                <strong style="color: #FFFFFF; font-size: 0.95rem;">PennyWise AI</strong>
-                <span id="ai-drawer-badge" class="badge"
-                    style="background: rgba(255,255,255,0.18); color: #FFFFFF; font-size: 0.65rem; padding: 2px 6px;">Gemini 2.5 Flash</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-                <button onclick="navigate('ai-assistant'); toggleFloatingAi();" class="ai-drawer-icon-btn"
-                    title="Open Full Screen">⛶</button>
-                <button onclick="toggleFloatingAi()" class="ai-drawer-icon-btn" title="Close">✕</button>
-            </div>
-        </div>
-        <div id="ai-drawer-messages" class="ai-drawer-messages"></div>
-        <div id="ai-drawer-typing" class="ai-typing-indicator" style="display: none; padding: 8px 12px;">
-            <div class="ai-typing-avatar" style="width: 24px; height: 24px; font-size: 0.8rem;">✨</div>
-            <div class="ai-typing-bubble" style="font-size: 0.78rem; padding: 6px 12px;">
-                <span>Thinking</span>
-                <span class="typing-dot"></span>
-                <span class="typing-dot"></span>
-                <span class="typing-dot"></span>
+                <form onsubmit="handleSaveExpense(event)">
+                    <input type="hidden" id="modal-expense-id">
+                    <div class="form-group">
+                        <label class="form-label">Amount (₹)</label>
+                        <input type="number" step="0.01" id="modal-expense-amount" class="form-input" placeholder="0.00"
+                            required style="font-size: 1.3rem; font-weight: 700;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <select id="modal-expense-category" class="form-select" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Payment Method</label>
+                        <select id="modal-expense-payment" class="form-select" required>
+                            <option value="UPI">UPI</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Debit Card">Debit Card</option>
+                            <option value="Credit Card">Credit Card</option>
+                            <option value="Net Banking">Net Banking</option>
+                            <option value="Wallet">Wallet</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Expense Date</label>
+                        <input type="date" id="modal-expense-date" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description / Note</label>
+                        <input type="text" id="modal-expense-desc" class="form-input"
+                            placeholder="Optional (defaults to selected category)">
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="modal-btn-submit">Save Expense</button>
+                    </div>
+                </form>
             </div>
         </div>
-        <div class="ai-drawer-input-bar">
-            <input type="text" id="ai-drawer-input" class="form-input" placeholder="Ask a financial or general query..."
-                onkeydown="handleAiDrawerKeydown(event)" style="font-size: 0.85rem; padding: 8px 12px;">
-            <button class="btn btn-primary btn-small" onclick="sendAiDrawerMessage()" title="Send">➔</button>
+
+        <!-- Floating AI Assistant FAB (Inside app-container) -->
+        <div id="ai-floating-fab" class="ai-floating-fab" onclick="toggleFloatingAi()" title="Ask PennyWise AI" style="display: none;">
+            <span class="ai-fab-sparkle">✨</span>
+            <span class="ai-fab-text">Ask AI</span>
         </div>
-    </div>
+
+        <!-- Floating AI Drawer Window (Inside app-container) -->
+        <div id="ai-floating-drawer" class="ai-floating-drawer" style="display: none;">
+            <div class="ai-drawer-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 1.2rem;">✨</span>
+                    <strong style="color: #FFFFFF; font-size: 0.95rem;">PennyWise AI</strong>
+                    <span id="ai-drawer-badge" class="badge"
+                        style="background: rgba(255,255,255,0.18); color: #FFFFFF; font-size: 0.65rem; padding: 2px 6px;">Gemini 2.5 Flash</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button onclick="navigate('ai-assistant'); toggleFloatingAi();" class="ai-drawer-icon-btn"
+                        title="Open Full Screen">⛶</button>
+                    <button onclick="toggleFloatingAi()" class="ai-drawer-icon-btn" title="Close">✕</button>
+                </div>
+            </div>
+            <div id="ai-drawer-messages" class="ai-drawer-messages"></div>
+            <div id="ai-drawer-typing" class="ai-typing-indicator" style="display: none; padding: 8px 12px;">
+                <div class="ai-typing-avatar" style="width: 24px; height: 24px; font-size: 0.8rem;">✨</div>
+                <div class="ai-typing-bubble" style="font-size: 0.78rem; padding: 6px 12px;">
+                    <span>Thinking</span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                </div>
+            </div>
+            <div class="ai-drawer-input-bar">
+                <input type="text" id="ai-drawer-input" class="form-input" placeholder="Ask a financial or general query..."
+                    onkeydown="handleAiDrawerKeydown(event)" style="font-size: 0.85rem; padding: 8px 12px;">
+                <button class="btn btn-primary btn-small" onclick="sendAiDrawerMessage()" title="Send">➔</button>
+            </div>
+        </div>
+    </div> <!-- end app-container -->
 
     <!-- Application Script -->
     <script src="/app.js"></script>
 </body>
-
 </html>

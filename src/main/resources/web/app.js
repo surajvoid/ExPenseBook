@@ -100,11 +100,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function initApp() {
+    const splash = document.getElementById('app-splash-loader');
     if (currentToken) {
         try {
             const resp = await apiFetch('/api/auth/current');
             if (resp && resp.user) {
                 currentUser = resp.user;
+                if (splash) {
+                    splash.style.opacity = '0';
+                    setTimeout(() => { splash.style.display = 'none'; }, 300);
+                }
                 showAppUI();
                 return;
             }
@@ -112,7 +117,12 @@ async function initApp() {
             console.warn('Session expired or invalid:', e);
             localStorage.removeItem('eb_token');
             currentToken = null;
+            currentUser = null;
         }
+    }
+    if (splash) {
+        splash.style.opacity = '0';
+        setTimeout(() => { splash.style.display = 'none'; }, 300);
     }
     showAuthUI();
 }
@@ -178,21 +188,91 @@ function showToast(message, type = 'info') {
 }
 
 // --- Auth UI Management ---
+
+// --- Tabbed Auth UI Controller ---
+function showAuthTab(tab) {
+    const loginForm = document.getElementById('form-login');
+    const registerForm = document.getElementById('form-register');
+    const personalizeStep = document.getElementById('step-personalize');
+    const tabLogin = document.getElementById('tab-login-btn');
+    const tabRegister = document.getElementById('tab-register-btn');
+    const switcher = document.getElementById('auth-tab-switch');
+    const errBanner = document.getElementById('auth-error-banner');
+
+    if (errBanner) errBanner.style.display = 'none';
+    if (personalizeStep) personalizeStep.style.display = 'none';
+    if (switcher) switcher.style.display = 'flex';
+
+    if (tab === 'login') {
+        if (loginForm) loginForm.style.display = 'block';
+        if (registerForm) registerForm.style.display = 'none';
+        if (tabLogin) tabLogin.classList.add('active');
+        if (tabRegister) tabRegister.classList.remove('active');
+    } else {
+        if (loginForm) loginForm.style.display = 'none';
+        if (registerForm) registerForm.style.display = 'block';
+        if (tabLogin) tabLogin.classList.remove('active');
+        if (tabRegister) tabRegister.classList.add('active');
+    }
+}
+
+function showLogin() {
+    showAuthTab('login');
+}
+
+function showRegister() {
+    showAuthTab('register');
+}
+
+function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.type === 'password') {
+        input.type = 'text';
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+    } else {
+        input.type = 'password';
+        btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    }
+}
+
 function showAuthUI() {
-    document.getElementById('auth-container').style.display = 'flex';
-    document.getElementById('app-container').style.display = 'none';
+    const splash = document.getElementById('app-splash-loader');
+    if (splash) splash.style.display = 'none';
+
+    const auth = document.getElementById('auth-container');
+    const app = document.getElementById('app-container');
+    if (auth) auth.style.display = 'flex';
+    if (app) app.style.display = 'none';
+
+    // Strictly ensure all floating and nav items are hidden
     const fab = document.getElementById('ai-floating-fab');
     if (fab) fab.style.display = 'none';
     const drawer = document.getElementById('ai-floating-drawer');
     if (drawer) drawer.style.display = 'none';
-    showOnboardingStep(1);
+    const bottomNav = document.getElementById('mobile-nav-bottom');
+    if (bottomNav) bottomNav.style.display = 'none';
+
+    showAuthTab('login');
 }
 
 function showAppUI() {
-    document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('app-container').style.display = 'flex';
+    const splash = document.getElementById('app-splash-loader');
+    if (splash) splash.style.display = 'none';
+
+    const auth = document.getElementById('auth-container');
+    const app = document.getElementById('app-container');
+    if (auth) auth.style.display = 'none';
+    if (app) app.style.display = 'flex';
+
     const fab = document.getElementById('ai-floating-fab');
     if (fab) fab.style.display = 'flex';
+
+    const bottomNav = document.getElementById('mobile-nav-bottom');
+    if (bottomNav && window.innerWidth <= 900) {
+        bottomNav.style.display = 'flex';
+    }
+
     updateUserHeaderAndSidebar();
     populateCategoryDropdowns();
     initAnalyticsPickers();
@@ -216,8 +296,12 @@ function showLogin() {
 }
 
 function fillAdminCredentials() {
-    document.getElementById('login-email').value = 'admin@expensebook.com';
-    document.getElementById('login-pass').value = 'SURAJ@260203';
+    showAuthTab('login');
+    const emailEl = document.getElementById('login-email');
+    const passEl = document.getElementById('login-pass');
+    if (emailEl) emailEl.value = 'admin@expensebook.com';
+    if (passEl) passEl.value = 'SURAJ@260203';
+    showToast('Admin credentials filled!', 'info');
 }
 
 function selectPersonalizeMode(mode) {
@@ -243,20 +327,30 @@ function handleRegisterSubmit(e) {
     const email = document.getElementById('reg-email').value.trim();
     const password = document.getElementById('reg-pass').value;
     const confirmPassword = document.getElementById('reg-conf-pass').value;
+    const errBox = document.getElementById('auth-error-banner');
 
-    const errBox = document.getElementById('register-error');
-    errBox.style.display = 'none';
+    if (errBox) errBox.style.display = 'none';
 
     if (password !== confirmPassword) {
-        errBox.textContent = 'Passwords do not match.';
-        errBox.style.display = 'flex';
+        if (errBox) {
+            errBox.textContent = 'Passwords do not match.';
+            errBox.style.display = 'block';
+        }
         return;
     }
 
     pendingRegisterData = { fullName: name, email, password, confirmPassword };
     window.selectedOnboardingMode = 'TRACK_ONLY';
-    selectPersonalizeMode('TRACK_ONLY');
-    showOnboardingStep(3);
+
+    const loginForm = document.getElementById('form-login');
+    const registerForm = document.getElementById('form-register');
+    const personalizeStep = document.getElementById('step-personalize');
+    const switcher = document.getElementById('auth-tab-switch');
+
+    if (loginForm) loginForm.style.display = 'none';
+    if (registerForm) registerForm.style.display = 'none';
+    if (switcher) switcher.style.display = 'none';
+    if (personalizeStep) personalizeStep.style.display = 'block';
 }
 
 async function finalizePersonalization() {
@@ -288,9 +382,14 @@ async function handleLoginSubmit(e) {
     e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-pass').value;
+    const errBox = document.getElementById('auth-error-banner');
+    const submitBtn = document.getElementById('btn-login-submit');
 
-    const errBox = document.getElementById('login-error');
-    errBox.style.display = 'none';
+    if (errBox) errBox.style.display = 'none';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Signing In...';
+    }
 
     try {
         const resp = await apiFetch('/api/auth/login', {
@@ -301,11 +400,19 @@ async function handleLoginSubmit(e) {
             currentToken = resp.token;
             currentUser = resp.user;
             localStorage.setItem('eb_token', currentToken);
+            showToast(`Welcome back, ${currentUser.fullName || 'User'}!`, 'success');
             showAppUI();
         }
     } catch (err) {
-        errBox.textContent = err.message;
-        errBox.style.display = 'flex';
+        if (errBox) {
+            errBox.textContent = err.message || 'Invalid email or password.';
+            errBox.style.display = 'block';
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Sign In →';
+        }
     }
 }
 
@@ -357,6 +464,10 @@ function updateUserHeaderAndSidebar() {
 }
 
 function navigate(viewName) {
+    if (!currentUser || !currentToken) {
+        showAuthUI();
+        return;
+    }
     currentView = viewName;
 
     // Hide all views
@@ -2140,6 +2251,10 @@ function clearAiChat() {
 
 // Floating Drawer Toggle
 function toggleFloatingAi() {
+    if (!currentUser || !currentToken) {
+        showAuthUI();
+        return;
+    }
     const drawer = document.getElementById('ai-floating-drawer');
     if (!drawer) return;
     const isHidden = drawer.style.display === 'none' || !drawer.style.display;
