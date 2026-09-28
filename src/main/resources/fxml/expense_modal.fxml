@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.expensebook.controller.ExpenseModalController"
+      spacing="18.0" prefWidth="440.0" styleClass="card" style="-fx-background-color: #FFFFFF; -fx-padding: 24px;">
+
+    <Label fx:id="modalTitle" text="Record Expense" styleClass="text-h2"/>
+    <Label fx:id="errorLabel" text="Error message" textFill="#C94A4A" style="-fx-font-weight: bold; -fx-font-size: 12px;" visible="false"/>
+
+    <VBox spacing="14.0">
+        <!-- Amount -->
+        <VBox spacing="6.0">
+            <Label text="Amount (â‚¹)" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+            <TextField fx:id="amountField" promptText="0.00" styleClass="text-input" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+        </VBox>
+
+        <!-- Category -->
+        <VBox spacing="6.0">
+            <Label text="Category" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+            <ComboBox fx:id="categoryComboBox" maxWidth="Infinity" promptText="Select Category" styleClass="combo-box"/>
+        </VBox>
+
+        <!-- Payment Method -->
+        <VBox spacing="6.0">
+            <Label text="Payment Method" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+            <ComboBox fx:id="paymentModeComboBox" maxWidth="Infinity" promptText="Select Payment Mode" styleClass="combo-box"/>
+        </VBox>
+
+        <!-- Date -->
+        <VBox spacing="6.0">
+            <Label text="Expense Date" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+            <DatePicker fx:id="datePicker" maxWidth="Infinity"/>
+        </VBox>
+
+        <!-- Description -->
+        <VBox spacing="6.0">
+            <Label text="Description / Note" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+            <TextField fx:id="descriptionField" promptText="e.g. Dinner, Grocery shopping, Fuel" styleClass="text-input"/>
+        </VBox>
+    </VBox>
+
+    <HBox spacing="12.0" alignment="CENTER_RIGHT" style="-fx-padding: 8 0 0 0;">
+        <Button fx:id="btnCancel" text="Cancel" onAction="#handleCancel" styleClass="btn-secondary"/>
+        <Button fx:id="btnSave" text="Save Expense" onAction="#handleSave" styleClass="btn-primary"/>
+    </HBox>
+
+</VBox>
+

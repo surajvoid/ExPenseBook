@@ -1,0 +1,99 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.expensebook.controller.IncomeController"
+      spacing="18.0" style="-fx-padding: 4px;">
+
+    <!-- Top Header Bar with Month Selection -->
+    <HBox alignment="CENTER_LEFT" spacing="14.0" styleClass="card">
+        <VBox spacing="2.0">
+            <Label text="Income &amp; Net Balance" styleClass="text-h2"/>
+            <Label text="Track income streams, calculate net savings, and monitor surplus" styleClass="text-muted"/>
+        </VBox>
+        <Region HBox.hgrow="ALWAYS"/>
+        <HBox spacing="10.0" alignment="CENTER">
+            <ComboBox fx:id="monthCombo" prefWidth="130.0" styleClass="combo-box"/>
+            <ComboBox fx:id="yearCombo" prefWidth="95.0" styleClass="combo-box"/>
+        </HBox>
+    </HBox>
+
+    <!-- Income, Expenses & Net Balance Summary Cards -->
+    <HBox spacing="16.0">
+        <VBox spacing="4.0" styleClass="card, card-highlight-sage" HBox.hgrow="ALWAYS">
+            <Label text="TOTAL MONTHLY INCOME" styleClass="text-stat-label"/>
+            <Label fx:id="totalIncomeLabel" text="â‚¹0" styleClass="text-stat-number-large"/>
+            <Label text="Recorded earnings this month" styleClass="text-muted"/>
+        </VBox>
+
+        <VBox spacing="4.0" styleClass="card, card-highlight-peach" HBox.hgrow="ALWAYS">
+            <Label text="TOTAL MONTHLY EXPENSES" styleClass="text-stat-label"/>
+            <Label fx:id="totalExpensesLabel" text="â‚¹0" styleClass="text-stat-number-large"/>
+            <Label text="Spending deducted" styleClass="text-muted"/>
+        </VBox>
+
+        <VBox spacing="4.0" styleClass="card, card-highlight-blue" HBox.hgrow="ALWAYS">
+            <Label text="NET BALANCE (SAVINGS)" styleClass="text-stat-label"/>
+            <Label fx:id="netBalanceLabel" text="â‚¹0" styleClass="text-stat-number-large"/>
+            <Label fx:id="netBalanceCardTag" text="ðŸŸ¢ Surplus" styleClass="text-muted"/>
+        </VBox>
+    </HBox>
+
+    <!-- Bottom Container: Add Income Form & Income Transactions Table -->
+    <HBox spacing="18.0" VBox.vgrow="ALWAYS">
+        <!-- Add Income Form Card -->
+        <VBox spacing="14.0" styleClass="card" prefWidth="380.0" minWidth="340.0">
+            <Label text="Record New Income" styleClass="text-h3"/>
+            <Separator/>
+
+            <VBox spacing="12.0">
+                <VBox spacing="6.0">
+                    <Label text="Amount (â‚¹)" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <TextField fx:id="amountField" promptText="0.00" styleClass="text-input"/>
+                </VBox>
+
+                <VBox spacing="6.0">
+                    <Label text="Source" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <ComboBox fx:id="sourceCombo" maxWidth="Infinity" styleClass="combo-box"/>
+                </VBox>
+
+                <VBox spacing="6.0">
+                    <Label text="Date" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <DatePicker fx:id="datePicker" maxWidth="Infinity"/>
+                </VBox>
+
+                <VBox spacing="6.0">
+                    <Label text="Description / Note" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <TextField fx:id="descriptionField" promptText="e.g. Monthly salary, Client project" styleClass="text-input"/>
+                </VBox>
+
+                <Button fx:id="btnAddIncome" text="+ Add Income" onAction="#handleAddIncome"
+                        styleClass="btn-primary" maxWidth="Infinity" prefHeight="40.0" style="-fx-margin: 6 0 0 0;"/>
+            </VBox>
+        </VBox>
+
+        <!-- Income Transactions Table Card -->
+        <VBox spacing="10.0" styleClass="card" HBox.hgrow="ALWAYS">
+            <Label text="Income Records" styleClass="text-h3"/>
+            <Separator/>
+
+            <TableView fx:id="incomeTable" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="colDate" text="Date" prefWidth="110.0"/>
+                    <TableColumn fx:id="colSource" text="Source" prefWidth="140.0"/>
+                    <TableColumn fx:id="colDescription" text="Description" prefWidth="240.0"/>
+                    <TableColumn fx:id="colAmount" text="Amount" prefWidth="120.0"/>
+                    <TableColumn fx:id="colActions" text="Actions" prefWidth="90.0"/>
+                </columns>
+                <columnResizePolicy>
+                    <TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/>
+                </columnResizePolicy>
+            </TableView>
+        </VBox>
+    </HBox>
+
+</VBox>
+

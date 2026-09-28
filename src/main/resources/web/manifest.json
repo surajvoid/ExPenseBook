@@ -1,0 +1,19 @@
+﻿{
+  "name": "ExPense Book — Spend Smart • Live Better",
+  "short_name": "ExPense Book",
+  "description": "Smart personal expense tracking and dedicated UPI automatic transaction tracking",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0D382B",
+  "theme_color": "#0D382B",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

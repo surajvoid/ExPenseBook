@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.chart.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<ScrollPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.expensebook.controller.AnalyticsController"
+            fitToWidth="true" style="-fx-background-color: transparent; -fx-background: transparent;">
+
+    <VBox spacing="18.0" style="-fx-padding: 4px;">
+
+        <!-- Header & Period Selectors -->
+        <HBox alignment="CENTER_LEFT" spacing="14.0" styleClass="card">
+            <VBox spacing="2.0">
+                <Label text="Spending Analytics &amp; Trends" styleClass="text-h2"/>
+                <Label text="Deep financial insights, category patterns, and multi-period comparisons" styleClass="text-muted"/>
+            </VBox>
+            <Region HBox.hgrow="ALWAYS"/>
+            <HBox spacing="10.0" alignment="CENTER">
+                <ComboBox fx:id="monthPickerCombo" prefWidth="140.0" styleClass="combo-box"/>
+                <ComboBox fx:id="yearPickerCombo" prefWidth="100.0" styleClass="combo-box"/>
+            </HBox>
+        </HBox>
+
+        <!-- Monthly Overview Top Summary -->
+        <HBox spacing="16.0">
+            <VBox spacing="4.0" styleClass="card, card-highlight-sage" HBox.hgrow="ALWAYS">
+                <Label text="SELECTED MONTH SPENDING" styleClass="text-stat-label"/>
+                <Label fx:id="monthlyTotalLabel" text="₹0" styleClass="text-stat-number-large"/>
+            </VBox>
+            <VBox spacing="4.0" styleClass="card, card-highlight-lavender" HBox.hgrow="ALWAYS">
+                <Label text="DAILY AVERAGE" styleClass="text-stat-label"/>
+                <Label fx:id="monthlyDailyAvgLabel" text="₹0 / day" styleClass="text-stat-number-large"/>
+            </VBox>
+        </HBox>
+
+        <!-- Section 1: Category Breakdown & Payment Method Analysis -->
+        <HBox spacing="18.0">
+            <!-- Category Analysis -->
+            <VBox spacing="12.0" styleClass="card" HBox.hgrow="ALWAYS">
+                <Label text="Category Breakdown" styleClass="text-h3"/>
+                <Separator/>
+                <HBox spacing="14.0" alignment="CENTER">
+                    <PieChart fx:id="categoryPieChart" prefWidth="280.0" prefHeight="220.0" legendVisible="false"/>
+                    <ScrollPane fitToWidth="true" prefHeight="220.0" HBox.hgrow="ALWAYS" style="-fx-background-color: transparent; -fx-background: transparent;">
+                        <VBox fx:id="categoryAnalysisList" spacing="8.0"/>
+                    </ScrollPane>
+                </HBox>
+            </VBox>
+
+            <!-- Payment Method Analysis -->
+            <VBox spacing="12.0" styleClass="card" HBox.hgrow="ALWAYS">
+                <Label text="Payment Method Distribution" styleClass="text-h3"/>
+                <Separator/>
+                <HBox spacing="14.0" alignment="CENTER">
+                    <BarChart fx:id="paymentBarChart" prefWidth="280.0" prefHeight="220.0" legendVisible="false">
+                        <xAxis>
+                            <CategoryAxis label="Method"/>
+                        </xAxis>
+                        <yAxis>
+                            <NumberAxis label="Amount (₹)"/>
+                        </yAxis>
+                    </BarChart>
+                    <ScrollPane fitToWidth="true" prefHeight="220.0" HBox.hgrow="ALWAYS" style="-fx-background-color: transparent; -fx-background: transparent;">
+                        <VBox fx:id="paymentModeList" spacing="8.0"/>
+                    </ScrollPane>
+                </HBox>
+            </VBox>
+        </HBox>
+
+        <!-- Section 2: Daily Spending Trend -->
+        <VBox spacing="12.0" styleClass="card">
+            <Label text="Daily Spending Trend" styleClass="text-h3"/>
+            <Separator/>
+            <LineChart fx:id="dailyTrendChart" prefHeight="240.0" legendVisible="false">
+                <xAxis>
+                    <CategoryAxis label="Day of Month"/>
+                </xAxis>
+                <yAxis>
+                    <NumberAxis label="Amount (₹)"/>
+                </yAxis>
+            </LineChart>
+        </VBox>
+
+        <!-- Section 3: Month-over-Month Comparison -->
+        <VBox spacing="12.0" styleClass="card">
+            <Label text="Month-over-Month Comparison" styleClass="text-h3"/>
+            <Separator/>
+
+            <HBox spacing="18.0" alignment="CENTER">
+                <VBox spacing="4.0" styleClass="card, card-highlight-blue" HBox.hgrow="ALWAYS">
+                    <Label fx:id="cmpPrevMonthName" text="July 2026" styleClass="text-stat-label"/>
+                    <Label fx:id="cmpPrevMonthAmount" text="₹0" styleClass="text-stat-number"/>
+                </VBox>
+
+                <Label text="vs" style="-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #71807A;"/>
+
+                <VBox spacing="4.0" styleClass="card, card-highlight-sage" HBox.hgrow="ALWAYS">
+                    <Label fx:id="cmpCurrentMonthName" text="August 2026" styleClass="text-stat-label"/>
+                    <Label fx:id="cmpCurrentMonthAmount" text="₹0" styleClass="text-stat-number"/>
+                </VBox>
+
+                <VBox spacing="4.0" styleClass="card" HBox.hgrow="ALWAYS">
+                    <Label text="DIFFERENCE &amp; CHANGE" styleClass="text-stat-label"/>
+                    <Label fx:id="cmpDifferenceLabel" text="₹0 (0%)" styleClass="text-stat-number"/>
+                </VBox>
+            </HBox>
+
+            <Label fx:id="cmpStatusBanner" text="Comparison status..." styleClass="badge, badge-sage" style="-fx-font-size: 13px; -fx-padding: 8 14 8 14;"/>
+        </VBox>
+
+        <!-- Section 4: Yearly Analysis -->
+        <VBox spacing="12.0" styleClass="card">
+            <Label text="Yearly Spending Analysis" styleClass="text-h3"/>
+            <Separator/>
+
+            <!-- Yearly Bar Chart -->
+            <BarChart fx:id="yearlyBarChart" prefHeight="260.0" legendVisible="false">
+                <xAxis>
+                    <CategoryAxis label="Month"/>
+                </xAxis>
+                <yAxis>
+                    <NumberAxis label="Total Spent (₹)"/>
+                </yAxis>
+            </BarChart>
+
+            <!-- Yearly Metrics Cards -->
+            <HBox spacing="14.0">
+                <VBox spacing="4.0" styleClass="card" HBox.hgrow="ALWAYS">
+                    <Label text="TOTAL YEARLY SPENDING" styleClass="text-stat-label"/>
+                    <Label fx:id="yearlyTotalLabel" text="₹0" styleClass="text-stat-number"/>
+                </VBox>
+                <VBox spacing="4.0" styleClass="card" HBox.hgrow="ALWAYS">
+                    <Label text="AVG MONTHLY SPEND" styleClass="text-stat-label"/>
+                    <Label fx:id="yearlyMonthlyAvgLabel" text="₹0" styleClass="text-stat-number"/>
+                </VBox>
+                <VBox spacing="4.0" styleClass="card, card-highlight-coral" HBox.hgrow="ALWAYS">
+                    <Label text="HIGHEST MONTH" styleClass="text-stat-label"/>
+                    <Label fx:id="yearlyHighestMonthLabel" text="-" styleClass="text-stat-number"/>
+                </VBox>
+                <VBox spacing="4.0" styleClass="card, card-highlight-sage" HBox.hgrow="ALWAYS">
+                    <Label text="LOWEST MONTH" styleClass="text-stat-label"/>
+                    <Label fx:id="yearlyLowestMonthLabel" text="-" styleClass="text-stat-number"/>
+                </VBox>
+            </HBox>
+        </VBox>
+
+    </VBox>
+</ScrollPane>

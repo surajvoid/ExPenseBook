@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.shape.Circle?>
+
+<StackPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.expensebook.controller.OnboardingController"
+           styleClass="main-bg" prefWidth="1080.0" prefHeight="720.0">
+
+    <!-- Screen 1: Welcome -->
+    <VBox fx:id="step1Welcome" alignment="CENTER" spacing="24.0" maxWidth="600.0" maxHeight="500.0" styleClass="card">
+        <VBox alignment="CENTER" spacing="8.0">
+            <StackPane prefWidth="72.0" prefHeight="72.0">
+                <Circle radius="36.0" fill="#E6F3EE"/>
+                <Label text="EB" style="-fx-font-size: 26px; -fx-font-weight: bold; -fx-text-fill: #397A5E;"/>
+            </StackPane>
+            <Label text="ExPense Book" style="-fx-font-size: 32px; -fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+            <Label text="Track  â€¢  Analyse  â€¢  Control" style="-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #78BFA0; -fx-letter-spacing: 2px;"/>
+        </VBox>
+
+        <Label text="A smart, calm, and personalized expense companion designed to bring clarity and control to your everyday financial life."
+               textAlignment="CENTER" wrapText="true" style="-fx-font-size: 14px; -fx-text-fill: #71807A; -fx-line-spacing: 4px;" maxWidth="440.0"/>
+
+        <HBox alignment="CENTER" spacing="16.0" style="-fx-padding: 12 0 0 0;">
+            <Button text="Get Started â†’" onAction="#handleGetStarted" styleClass="btn-primary" prefWidth="180.0" prefHeight="44.0"/>
+            <Button text="Sign In" onAction="#handleGoToLogin" styleClass="btn-secondary" prefWidth="140.0" prefHeight="44.0"/>
+        </HBox>
+    </VBox>
+
+    <!-- Screen 2: Account Creation -->
+    <VBox fx:id="step2Account" alignment="CENTER" spacing="20.0" maxWidth="480.0" maxHeight="560.0" styleClass="card" visible="false" managed="false">
+        <VBox alignment="CENTER" spacing="4.0">
+            <Label text="Create Your Account" styleClass="text-h1"/>
+            <Label text="Sign up to begin your personalized financial journey." styleClass="text-muted"/>
+        </VBox>
+
+        <Label fx:id="accountErrorLabel" text="Error message" textFill="#C94A4A" style="-fx-font-weight: bold; -fx-font-size: 12px;" visible="false"/>
+
+        <VBox spacing="14.0" prefWidth="380.0">
+            <VBox spacing="6.0">
+                <Label text="Full Name" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                <TextField fx:id="fullNameField" promptText="e.g. Suraj Sharma" styleClass="text-input"/>
+            </VBox>
+
+            <VBox spacing="6.0">
+                <Label text="Email Address" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                <TextField fx:id="emailField" promptText="suraj@example.com" styleClass="text-input"/>
+            </VBox>
+
+            <VBox spacing="6.0">
+                <Label text="Password" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                <PasswordField fx:id="passwordField" promptText="At least 6 characters" styleClass="text-input"/>
+            </VBox>
+
+            <VBox spacing="6.0">
+                <Label text="Confirm Password" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                <PasswordField fx:id="confirmPasswordField" promptText="Re-enter password" styleClass="text-input"/>
+            </VBox>
+        </VBox>
+
+        <VBox spacing="12.0" alignment="CENTER" prefWidth="380.0" style="-fx-padding: 8 0 0 0;">
+            <Button text="Create Account" onAction="#handleCreateAccount" styleClass="btn-primary" maxWidth="Infinity" prefHeight="44.0"/>
+            <Button text="Already have an account? Login" onAction="#handleGoToLogin" style="-fx-background-color: transparent; -fx-text-fill: #5FA787; -fx-font-weight: bold; -fx-cursor: hand;"/>
+        </VBox>
+    </VBox>
+
+    <!-- Screen 3: Personalization Mode Selection -->
+    <VBox fx:id="step3Personalize" alignment="CENTER" spacing="24.0" maxWidth="640.0" maxHeight="560.0" styleClass="card" visible="false" managed="false">
+        <VBox alignment="CENTER" spacing="6.0">
+            <Label text="How do you want to use ExPense Book?" styleClass="text-h1" textAlignment="CENTER"/>
+            <Label text="Choose the experience that fits your goals. You can change this anytime." styleClass="text-muted" textAlignment="CENTER"/>
+        </VBox>
+
+        <fx:define>
+            <ToggleGroup fx:id="modeGroup"/>
+        </fx:define>
+
+        <HBox spacing="18.0" alignment="CENTER">
+            <!-- Option 1: Just Track My Expenses -->
+            <VBox fx:id="cardTrackOnly" spacing="12.0" prefWidth="270.0" prefHeight="220.0" styleClass="card" style="-fx-border-color: #78BFA0; -fx-cursor: hand;">
+                <HBox alignment="CENTER_LEFT" spacing="10.0">
+                    <RadioButton fx:id="radioTrackOnly" toggleGroup="$modeGroup" selected="true"/>
+                    <Label text="Just Track Expenses" style="-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                </HBox>
+                <Label text="ðŸ“" style="-fx-font-size: 36px;"/>
+                <Label text="Record and analyse your spending without setting a budget. Clean, simple, and distraction-free."
+                       wrapText="true" style="-fx-font-size: 12px; -fx-text-fill: #71807A; -fx-line-spacing: 3px;"/>
+                <Region VBox.vgrow="ALWAYS"/>
+                <Label text="Track Only Mode" styleClass="badge, badge-sage"/>
+            </VBox>
+
+            <!-- Option 2: Track + Monthly Budget -->
+            <VBox fx:id="cardTrackBudget" spacing="12.0" prefWidth="270.0" prefHeight="220.0" styleClass="card" style="-fx-border-color: #A9CFE0; -fx-cursor: hand;">
+                <HBox alignment="CENTER_LEFT" spacing="10.0">
+                    <RadioButton fx:id="radioTrackBudget" toggleGroup="$modeGroup"/>
+                    <Label text="Track + Monthly Budget" style="-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                </HBox>
+                <Label text="ðŸ’°" style="-fx-font-size: 36px;"/>
+                <Label text="Track your expenses, set monthly spending limits, get smart daily recommendations, and month-end projections."
+                       wrapText="true" style="-fx-font-size: 12px; -fx-text-fill: #71807A; -fx-line-spacing: 3px;"/>
+                <Region VBox.vgrow="ALWAYS"/>
+                <Label text="Track + Budget Mode" styleClass="badge, badge-blue"/>
+            </VBox>
+        </HBox>
+
+        <VBox alignment="CENTER" spacing="10.0">
+            <Button text="Continue to Dashboard â†’" onAction="#handleFinalizePersonalization" styleClass="btn-primary" prefWidth="240.0" prefHeight="44.0"/>
+            <Label text="You can switch modes anytime from Settings." style="-fx-font-size: 11px; -fx-text-fill: #A0ABA6;"/>
+        </VBox>
+    </VBox>
+
+</StackPane>
+

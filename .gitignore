@@ -1,0 +1,25 @@
+# Maven Build Output (NEVER upload to GitHub - exceeds file size limits)
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Build Generated
+dependency-reduced-pom.xml
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Local Database & Secrets
+expensebook.db
+*.db
+db.properties
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

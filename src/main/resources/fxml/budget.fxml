@@ -1,0 +1,124 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<ScrollPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.expensebook.controller.BudgetController"
+            fitToWidth="true" style="-fx-background-color: transparent; -fx-background: transparent;">
+
+    <VBox spacing="18.0" style="-fx-padding: 4px;">
+
+        <!-- Header Bar with Month Picker & Budget Setting -->
+        <HBox alignment="CENTER_LEFT" spacing="14.0" styleClass="card">
+            <VBox spacing="2.0">
+                <Label text="Budget Management &amp; Insights" styleClass="text-h2"/>
+                <Label text="Smart daily allocations, month-end projections, and category limits" styleClass="text-muted"/>
+            </VBox>
+            <Region HBox.hgrow="ALWAYS"/>
+            <HBox spacing="10.0" alignment="CENTER">
+                <ComboBox fx:id="monthCombo" prefWidth="130.0" styleClass="combo-box"/>
+                <ComboBox fx:id="yearCombo" prefWidth="95.0" styleClass="combo-box"/>
+                <TextField fx:id="overallBudgetInput" promptText="Set Budget (â‚¹)" prefWidth="130.0" styleClass="text-input"/>
+                <Button fx:id="btnSaveOverallBudget" text="Set Budget" onAction="#handleSaveOverallBudget" styleClass="btn-primary"/>
+            </HBox>
+        </HBox>
+
+        <!-- Active Alerts Container -->
+        <VBox fx:id="alertsBox" spacing="8.0" visible="false" managed="false"/>
+
+        <!-- Budget Primary Overview Cards -->
+        <HBox spacing="16.0">
+            <VBox spacing="4.0" styleClass="card, card-highlight-blue" HBox.hgrow="ALWAYS">
+                <Label text="MONTHLY BUDGET" styleClass="text-stat-label"/>
+                <Label fx:id="monthlyBudgetDisplay" text="â‚¹0" styleClass="text-stat-number-large"/>
+            </VBox>
+            <VBox spacing="4.0" styleClass="card, card-highlight-peach" HBox.hgrow="ALWAYS">
+                <Label text="AMOUNT SPENT" styleClass="text-stat-label"/>
+                <Label fx:id="spentDisplay" text="â‚¹0" styleClass="text-stat-number-large"/>
+            </VBox>
+            <VBox spacing="4.0" styleClass="card, card-highlight-sage" HBox.hgrow="ALWAYS">
+                <Label text="REMAINING BUDGET" styleClass="text-stat-label"/>
+                <Label fx:id="remainingDisplay" text="â‚¹0" styleClass="text-stat-number-large"/>
+            </VBox>
+            <VBox spacing="4.0" styleClass="card" HBox.hgrow="ALWAYS">
+                <Label text="BUDGET USED" styleClass="text-stat-label"/>
+                <Label fx:id="budgetUsedPercentDisplay" text="0%" styleClass="text-stat-number-large"/>
+            </VBox>
+        </HBox>
+
+        <!-- Overall Budget Progress Bar Card -->
+        <VBox spacing="10.0" styleClass="card">
+            <HBox alignment="CENTER_LEFT">
+                <Label text="Overall Budget Progress" styleClass="text-h3"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="recommendationCard" text="Recommendation insight..." style="-fx-font-weight: bold; -fx-text-fill: #397A5E;"/>
+            </HBox>
+            <ProgressBar fx:id="budgetProgressBar" progress="0.0" maxWidth="Infinity" prefHeight="12.0"/>
+        </VBox>
+
+        <!-- Smart Calculations & Month-End Projection -->
+        <HBox spacing="16.0">
+            <!-- Smart Calculations Card -->
+            <VBox spacing="14.0" styleClass="card" HBox.hgrow="ALWAYS">
+                <Label text="Smart Budget Calculations" styleClass="text-h3"/>
+                <Separator/>
+                <GridPane hgap="16.0" vgap="12.0">
+                    <columnConstraints>
+                        <ColumnConstraints percentWidth="50.0"/>
+                        <ColumnConstraints percentWidth="50.0"/>
+                    </columnConstraints>
+
+                    <VBox spacing="2.0" GridPane.columnIndex="0" GridPane.rowIndex="0">
+                        <Label text="DAYS PASSED" styleClass="text-stat-label"/>
+                        <Label fx:id="daysPassedLabel" text="0" styleClass="text-stat-number"/>
+                    </VBox>
+                    <VBox spacing="2.0" GridPane.columnIndex="1" GridPane.rowIndex="0">
+                        <Label text="DAYS REMAINING" styleClass="text-stat-label"/>
+                        <Label fx:id="daysRemainingLabel" text="0" styleClass="text-stat-number"/>
+                    </VBox>
+                    <VBox spacing="2.0" GridPane.columnIndex="0" GridPane.rowIndex="1">
+                        <Label text="AVERAGE DAILY SPEND" styleClass="text-stat-label"/>
+                        <Label fx:id="avgDailySpentLabel" text="â‚¹0" styleClass="text-stat-number"/>
+                    </VBox>
+                    <VBox spacing="2.0" GridPane.columnIndex="1" GridPane.rowIndex="1">
+                        <Label text="RECOMMENDED DAILY SPEND" styleClass="text-stat-label"/>
+                        <Label fx:id="recommendedDailyLabel" text="â‚¹0" styleClass="text-stat-number"/>
+                    </VBox>
+                </GridPane>
+            </VBox>
+
+            <!-- Month-End Projection Card -->
+            <VBox spacing="14.0" styleClass="card" HBox.hgrow="ALWAYS">
+                <Label text="Month-End Spending Projection" styleClass="text-h3"/>
+                <Separator/>
+                <VBox spacing="6.0">
+                    <Label text="PROJECTED MONTH-END TOTAL" styleClass="text-stat-label"/>
+                    <Label fx:id="projectedSpendingLabel" text="â‚¹0" styleClass="text-stat-number-large"/>
+                </VBox>
+                <Label fx:id="projectionStatusLabel" text="Projection insight..." wrapText="true"
+                       style="-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #26332F; -fx-line-spacing: 4px;"/>
+                <Label text="* Calculated mathematically using current average daily burn rate across remaining calendar days."
+                       wrapText="true" style="-fx-font-size: 11px; -fx-text-fill: #A0ABA6;"/>
+            </VBox>
+        </HBox>
+
+        <!-- Category Budgets Section -->
+        <VBox spacing="14.0" styleClass="card">
+            <HBox alignment="CENTER_LEFT">
+                <VBox spacing="2.0">
+                    <Label text="Category-Specific Budgets" styleClass="text-h3"/>
+                    <Label text="Set custom spending limits for individual categories" styleClass="text-muted"/>
+                </VBox>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button fx:id="btnSaveCategoryBudgets" text="Save Category Limits" onAction="#handleSaveCategoryBudgets" styleClass="btn-secondary"/>
+            </HBox>
+            <Separator/>
+
+            <VBox fx:id="categoryBudgetsContainer" spacing="10.0"/>
+        </VBox>
+
+    </VBox>
+</ScrollPane>
+

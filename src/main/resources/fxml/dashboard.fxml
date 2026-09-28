@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.chart.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<ScrollPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.expensebook.controller.DashboardController"
+            fitToWidth="true" style="-fx-background-color: transparent; -fx-background: transparent;">
+
+    <VBox spacing="20.0" style="-fx-padding: 4px;">
+
+        <!-- Mode B: Smart Budget Section (Hidden if Track Only) -->
+        <VBox fx:id="budgetSection" spacing="14.0" styleClass="card, card-highlight-blue">
+            <HBox alignment="CENTER_LEFT" spacing="10.0">
+                <Label text="ðŸ’° Monthly Budget Overview" styleClass="text-h3"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="budgetPercentLabel" text="0% Used" styleClass="badge, badge-blue"/>
+            </HBox>
+
+            <!-- Budget Cards Row -->
+            <HBox spacing="14.0">
+                <VBox spacing="4.0" styleClass="card" HBox.hgrow="ALWAYS">
+                    <Label text="MONTHLY BUDGET" styleClass="text-stat-label"/>
+                    <Label fx:id="monthlyBudgetLabel" text="â‚¹0" styleClass="text-stat-number"/>
+                </VBox>
+                <VBox spacing="4.0" styleClass="card" HBox.hgrow="ALWAYS">
+                    <Label text="SPENT" styleClass="text-stat-label"/>
+                    <Label fx:id="budgetSpentLabel" text="â‚¹0" styleClass="text-stat-number"/>
+                </VBox>
+                <VBox spacing="4.0" styleClass="card" HBox.hgrow="ALWAYS">
+                    <Label text="REMAINING" styleClass="text-stat-label"/>
+                    <Label fx:id="budgetRemainingLabel" text="â‚¹0" styleClass="text-stat-number"/>
+                </VBox>
+            </HBox>
+
+            <!-- Budget Progress Bar -->
+            <ProgressBar fx:id="budgetProgressBar" progress="0.0" maxWidth="Infinity" prefHeight="10.0"/>
+
+            <!-- Smart Insights -->
+            <HBox spacing="16.0" alignment="CENTER_LEFT">
+                <Label fx:id="recommendedDailyLabel" text="ðŸŸ¢ Recommended daily spending..." style="-fx-font-weight: bold; -fx-text-fill: #26332F; -fx-font-size: 12px;" HBox.hgrow="ALWAYS"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="projectionInsightLabel" text="Estimated month-end projection..." styleClass="text-muted"/>
+            </HBox>
+
+            <!-- Alert Banners Container -->
+            <VBox fx:id="alertsContainer" spacing="6.0"/>
+        </VBox>
+
+        <!-- Mode A: Core Summary Metrics Cards (Always visible) -->
+        <HBox spacing="16.0">
+            <!-- Total Spent Card -->
+            <VBox spacing="6.0" styleClass="card-summary, card-highlight-peach" HBox.hgrow="ALWAYS">
+                <Label text="TOTAL SPENT" styleClass="text-stat-label"/>
+                <Label fx:id="totalSpentLabel" text="â‚¹0" styleClass="text-stat-number-large"/>
+                <Label text="Current billing month" styleClass="text-muted"/>
+            </VBox>
+
+            <!-- Today's Spending Card -->
+            <VBox spacing="6.0" styleClass="card-summary, card-highlight-sage" HBox.hgrow="ALWAYS">
+                <Label text="TODAY" styleClass="text-stat-label"/>
+                <Label fx:id="todaySpentLabel" text="₹0" styleClass="text-stat-number-large"/>
+                <Label text="Recorded today" styleClass="text-muted"/>
+            </VBox>
+
+            <!-- Daily Average Card -->
+            <VBox spacing="6.0" styleClass="card-summary, card-highlight-lavender" HBox.hgrow="ALWAYS">
+                <Label text="DAILY AVERAGE" styleClass="text-stat-label"/>
+                <Label fx:id="dailyAvgLabel" text="â‚¹0" styleClass="text-stat-number-large"/>
+                <Label text="Average spend/day" styleClass="text-muted"/>
+            </VBox>
+
+            <!-- Days Left in Month Card -->
+            <VBox spacing="6.0" styleClass="card-summary" HBox.hgrow="ALWAYS">
+                <Label text="DAYS LEFT" styleClass="text-stat-label"/>
+                <Label fx:id="daysLeftLabel" text="0" styleClass="text-stat-number-large"/>
+                <Label text="Days remaining this month" styleClass="text-muted"/>
+            </VBox>
+        </HBox>
+
+        <!-- Middle Section: Categories Breakdown + Spending Trend Chart -->
+        <HBox spacing="20.0">
+            <!-- "Where did your money go?" Category Section -->
+            <VBox spacing="14.0" styleClass="card" prefWidth="420.0" minWidth="380.0">
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="Where did your money go?" styleClass="text-h3"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label text="By Category" styleClass="text-muted"/>
+                </HBox>
+                <Separator/>
+
+                <ScrollPane fitToWidth="true" prefHeight="260.0" style="-fx-background-color: transparent; -fx-background: transparent;">
+                    <VBox fx:id="categoriesContainer" spacing="12.0"/>
+                </ScrollPane>
+            </VBox>
+
+            <!-- Spending Trend Line Chart -->
+            <VBox spacing="14.0" styleClass="card" HBox.hgrow="ALWAYS">
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="Spending Trend" styleClass="text-h3"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label text="Daily expenses this month" styleClass="text-muted"/>
+                </HBox>
+                <Separator/>
+
+                <LineChart fx:id="spendingTrendChart" prefHeight="260.0" legendVisible="false">
+                    <xAxis>
+                        <CategoryAxis fx:id="chartXAxis" label="Day of Month"/>
+                    </xAxis>
+                    <yAxis>
+                        <NumberAxis fx:id="chartYAxis" label="Amount (â‚¹)"/>
+                    </yAxis>
+                </LineChart>
+            </VBox>
+        </HBox>
+
+        <!-- Bottom Section: Recent Transactions Preview -->
+        <VBox spacing="14.0" styleClass="card">
+            <HBox alignment="CENTER_LEFT">
+                <Label text="Recent Transactions" styleClass="text-h3"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Button fx:id="btnAddExpenseQuick" text="+ Add Expense" onAction="#handleQuickAddExpense" styleClass="btn-secondary, btn-pill-small"/>
+            </HBox>
+            <Separator/>
+
+            <VBox fx:id="recentTransactionsContainer" spacing="8.0"/>
+        </VBox>
+
+    </VBox>
+</ScrollPane>
+

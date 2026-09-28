@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0D382B">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ExPense Book">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/logo.png">
+    <title>ExPense Book — Spend Smart • Live Better</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="stylesheet" href="/style.css">
+    <!-- Chart.js for beautiful interactive analytics and spending trend charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+    <!-- Offline Notification Banner -->
+    <div id="offline-banner" class="offline-banner" style="display: none;">
+        <span>📡 You are currently offline. Running in offline resilient mode with cached data.</span>
+    </div>
+
+    <!-- Auth / Onboarding Container -->
+    <div id="auth-container"
+        style="display: flex; align-items: center; justify-content: center; min-height: 100vh; width: 100vw; padding: 20px;">
+        <!-- Step 1: Welcome -->
+        <div id="step-welcome" class="card"
+            style="max-width: 520px; width: 100%; text-align: center; padding: 36px 28px;">
+            <img src="/logo.png" alt="ExPense Book Logo"
+                style="width: 72px; height: 72px; border-radius: 16px; object-fit: contain; margin: 0 auto 16px; display: block; box-shadow: 0 4px 14px rgba(13, 56, 43, 0.15);">
+            <img src="/brand-wordmark-dark.png" alt="ExPense Book — Spend Smart • Live Better"
+                style="height: 52px; max-width: 88%; margin: 0 auto 14px; display: block; object-fit: contain;">
+            <div style="display: flex; gap: 14px; justify-content: center;">
+                <button class="btn btn-primary" onclick="showOnboardingStep(2)" style="padding: 12px 28px;">Get Started
+                    →</button>
+                <button class="btn btn-secondary" onclick="showLogin()" style="padding: 12px 24px;">Sign In</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Register -->
+        <div id="step-register" class="card" style="max-width: 440px; width: 100%; display: none; padding: 32px 26px;">
+            <h2 style="margin-bottom: 4px;">Create Account</h2>
+            <p class="text-muted" style="margin-bottom: 20px;">Sign up to begin your personalized financial journey.</p>
+            <div id="register-error" class="badge badge-coral"
+                style="display: none; margin-bottom: 12px; width: 100%; justify-content: center; padding: 8px;"></div>
+
+            <form onsubmit="handleRegisterSubmit(event)">
+                <div class="form-group">
+                    <label class="form-label">Full Name</label>
+                    <input type="text" id="reg-name" class="form-input" placeholder="" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" id="reg-email" class="form-input" placeholder="" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="reg-pass" class="form-input" placeholder="At least 6 characters" required
+                        minlength="6">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Confirm Password</label>
+                    <input type="password" id="reg-conf-pass" class="form-input" placeholder="Re-enter password"
+                        required>
+                </div>
+                <button type="submit" class="btn btn-primary"
+                    style="width: 100%; padding: 12px; margin-top: 8px;">Continue →</button>
+            </form>
+            <p style="text-align: center; margin-top: 18px; font-size: 0.85rem;">
+                Already have an account? <a href="javascript:void(0)" onclick="showLogin()"
+                    style="color: #5FA787; font-weight: 700; text-decoration: none;">Login</a>
+            </p>
+        </div>
+
+        <!-- Step 3: Personalization Mode Selection -->
+        <div id="step-personalize" class="card"
+            style="max-width: 600px; width: 100%; display: none; padding: 32px 26px; text-align: center;">
+            <h2 style="margin-bottom: 6px;">How do you want to use ExPense Book?</h2>
+            <p class="text-muted" style="margin-bottom: 24px;">Choose the experience that fits your goals. You can
+                change this anytime from Settings.</p>
+
+            <div class="grid-2" style="margin-bottom: 24px; text-align: left;">
+                <div id="mode-opt-track" class="card" onclick="selectPersonalizeMode('TRACK_ONLY')"
+                    style="border: 2px solid #78BFA0; cursor: pointer;">
+                    <h3 style="font-size: 1rem; margin-bottom: 4px;">Just Track Expenses</h3>
+                    <p class="text-muted" style="font-size: 0.8rem; line-height: 1.5; margin-bottom: 12px;">Record and
+                        analyse your spending without setting a budget. Clean, simple, and distraction-free.</p>
+                    <span class="badge badge-sage">Track Only</span>
+                </div>
+                <div id="mode-opt-budget" class="card" onclick="selectPersonalizeMode('TRACK_AND_BUDGET')"
+                    style="border: 1px solid var(--border-color); cursor: pointer;">
+                    <h3 style="font-size: 1rem; margin-bottom: 4px;">Track + Monthly Budget</h3>
+                    <p class="text-muted" style="font-size: 0.8rem; line-height: 1.5; margin-bottom: 12px;">Track
+                        expenses, set monthly spending limits, get smart daily recommendations &amp; projections.</p>
+                    <span class="badge badge-blue">Track + Budget</span>
+                </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="finalizePersonalization()" style="padding: 12px 36px;">Launch
+                Dashboard →</button>
+        </div>
+
+        <!-- Login Form -->
+        <div id="step-login" class="card" style="max-width: 420px; width: 100%; display: none; padding: 32px 26px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <img src="/logo.png" alt="ExPense Book Logo"
+                    style="width: 56px; height: 56px; border-radius: 12px; object-fit: contain; margin: 0 auto 12px; display: block; box-shadow: 0 3px 10px rgba(13, 56, 43, 0.12);">
+                <img src="/brand-wordmark-dark.png" alt="ExPense Book"
+                    style="height: 38px; max-width: 85%; margin: 0 auto 10px; display: block; object-fit: contain;">
+                <p class="text-muted">Sign in to your ExPense Book account</p>
+            </div>
+            <div id="login-error" class="badge badge-coral"
+                style="display: none; margin-bottom: 12px; width: 100%; justify-content: center; padding: 8px;"></div>
+
+            <form onsubmit="handleLoginSubmit(event)">
+                <div class="form-group">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" id="login-email" class="form-input" placeholder="Enter your email" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="login-pass" class="form-input" placeholder="Enter your password"
+                        required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; margin-top: 8px;">Sign
+                    In</button>
+            </form>
+
+            <div
+                style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-color); text-align: center;">
+                <button class="btn btn-secondary btn-small" onclick="fillAdminCredentials()"
+                    style="width: 100%; margin-bottom: 10px;">Fill Admin Credentials</button>
+                <p style="font-size: 0.85rem;">New to ExPense Book? <a href="javascript:void(0)"
+                        onclick="showOnboardingStep(1)"
+                        style="color: #5FA787; font-weight: 700; text-decoration: none;">Get Started</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Layout (Hidden until authenticated) -->
+    <div id="app-container" style="display: none;">
+        <!-- Left Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-window-dots">
+                <span class="window-dot dot-red"></span>
+                <span class="window-dot dot-yellow"></span>
+                <span class="window-dot dot-green"></span>
+            </div>
+
+            <div class="brand-header">
+                <img src="/logo.png" alt="ExPense Book Logo" class="brand-logo-img">
+                <img src="/brand-wordmark-light.png" alt="ExPense Book — Spend Smart • Live Better"
+                    class="brand-wordmark-img" title="ExPense Book — Spend Smart • Live Better">
+            </div>
+
+            <ul class="nav-links">
+                <li class="nav-item active" onclick="navigate('dashboard')">Dashboard</li>
+                <li class="nav-item" onclick="openExpenseModal()">Add Expense</li>
+                <li class="nav-item" onclick="navigate('transactions')">Transactions</li>
+                <li class="nav-item" onclick="navigate('calendar')">Calendar</li>
+                <li class="nav-item" onclick="navigate('analytics')">Analytics</li>
+                <li class="nav-item" id="nav-item-budget" onclick="navigate('budget')">Budget</li>
+                <li class="nav-item" onclick="navigate('income')">Income</li>
+                <li class="nav-item" onclick="navigate('recurring')">Recurring</li>
+                <li class="nav-item" onclick="navigate('reports')">Reports</li>
+                <li class="nav-item" onclick="navigate('ai-assistant')">✨ AI Assistant</li>
+                <li class="nav-item" onclick="navigate('settings')">Settings</li>
+                <li class="nav-item" id="nav-item-admin" onclick="navigate('admin')" style="display: none;">Admin Panel
+                </li>
+            </ul>
+
+            <div class="sidebar-bottom-plant">
+                <svg width="74" height="80" viewBox="0 0 84 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M26 68 L58 68 L54 90 L30 90 Z" fill="#D4E4D7" rx="3" />
+                    <path d="M42 68 V32" stroke="#07241B" stroke-width="3" stroke-linecap="round" />
+                    <path d="M42 46 C30 38 24 45 26 54 C36 55 41 50 42 46 Z" fill="#2E805B" />
+                    <path d="M42 38 C54 30 60 36 58 45 C48 45 43 42 42 38 Z" fill="#3AA073" />
+                    <path d="M42 22 C32 14 36 6 42 4 C48 6 52 14 42 22 Z" fill="#4BC48E" />
+                    <path d="M42 56 C52 50 56 54 54 60 C46 61 43 58 42 56 Z" fill="#3AA073" />
+                </svg>
+                <div class="plant-quote">
+                    <span>Small steps</span>
+                    <span>bigger freedom</span>
+                </div>
+            </div>
+
+            <div class="sidebar-user-card">
+                <div
+                    style="width: 32px; height: 32px; border-radius: 50%; background: #D4EBE0; color: #0D382B; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 0.85rem;">
+                    U</div>
+                <div style="flex-grow: 1; overflow: hidden;">
+                    <div id="user-display-name"
+                        style="font-weight: 700; font-size: 0.85rem; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
+                        User</div>
+                    <div id="user-display-mode" style="font-size: 0.72rem; color: #D4EBE0; font-weight: 700;">Track Only
+                    </div>
+                </div>
+                <button class="btn btn-danger btn-small" onclick="handleLogout()" title="Sign Out"
+                    style="padding: 4px 10px; font-size: 0.75rem; background: rgba(232, 140, 140, 0.2); border: 1px solid rgba(232, 140, 140, 0.4); color: #FFB3B3;">Sign
+                    Out</button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Navbar -->
+            <header class="top-navbar">
+                <div class="top-navbar-left">
+                    <button class="mobile-menu-toggle" onclick="toggleMobileSidebar()" aria-label="Open Navigation">☰</button>
+                    <div>
+                        <h2 id="top-greeting" style="font-size: 1.25rem;">Hey!</h2>
+                        <span id="top-period" class="text-muted">September 2026</span>
+                    </div>
+                </div>
+
+                <div class="top-navbar-right">
+                    <span id="top-mode-badge" class="badge badge-sage">Track Only</span>
+                    <button class="btn btn-primary" onclick="openExpenseModal()">₹ Add Expense</button>
+                </div>
+            </header>
+
+            <!-- Dynamic Views Body -->
+            <div class="content-body">
+
+                <!-- View: Dashboard -->
+                <div id="view-dashboard" class="view-panel">
+                    <!-- Mode B Budget Banner (conditionally displayed) -->
+                    <div id="dashboard-budget-card" class="card card-highlight-blue"
+                        style="margin-bottom: 20px; display: none;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h3>Monthly Budget Overview</h3>
+                            <span id="dash-budget-percent" class="badge badge-blue">0% Used</span>
+                        </div>
+                        <div class="grid-3" style="margin-bottom: 12px;">
+                            <div class="card" style="padding: 14px;">
+                                <div class="text-muted" style="font-size: 0.75rem; font-weight: 700;">MONTHLY BUDGET
+                                </div>
+                                <div id="dash-budget-total" class="text-stat-number">₹0</div>
+                            </div>
+                            <div class="card" style="padding: 14px;">
+                                <div class="text-muted" style="font-size: 0.75rem; font-weight: 700;">SPENT</div>
+                                <div id="dash-budget-spent" class="text-stat-number">₹0</div>
+                            </div>
+                            <div class="card" style="padding: 14px;">
+                                <div class="text-muted" style="font-size: 0.75rem; font-weight: 700;">REMAINING</div>
+                                <div id="dash-budget-remaining" class="text-stat-number">₹0</div>
+                            </div>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div id="dash-budget-progress-fill" class="progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; flex-wrap: wrap; gap: 8px;">
+                            <div id="dash-recommended-daily"
+                                style="font-size: 0.85rem; font-weight: 700; color: #2D6B50;">Recommended Daily: ₹0
+                            </div>
+                            <div id="dash-projection-text" class="text-muted" style="font-size: 0.85rem;">Estimated
+                                month-end: ₹0</div>
+                        </div>
+                        <div id="dash-alerts-box"
+                            style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;"></div>
+                    </div>
+
+                    <!-- Mode A Summary Cards -->
+                    <div class="grid-4" style="margin-bottom: 20px;">
+                        <div class="card summary-metric-card">
+                            <div class="text-muted"
+                                style="font-weight: 700; font-size: 0.75rem; letter-spacing: 0.5px;">TOTAL SPENT</div>
+                            <div id="dash-total-spent" class="text-stat-large">₹0</div>
+                            <div class="text-muted" style="font-size: 0.75rem; color: #1B6E4A; font-weight: 600;">
+                                Current billing month</div>
+                        </div>
+                        <div class="card summary-metric-card">
+                            <div class="text-muted"
+                                style="font-weight: 700; font-size: 0.75rem; letter-spacing: 0.5px;">SPENT TODAY</div>
+                            <div id="dash-today-spent" class="text-stat-large">₹0</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">Recorded today</div>
+                        </div>
+                        <div class="card summary-metric-card">
+                            <div class="text-muted"
+                                style="font-weight: 700; font-size: 0.75rem; letter-spacing: 0.5px;">DAILY AVERAGE</div>
+                            <div id="dash-daily-avg" class="text-stat-large">₹0</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">Burn rate per day</div>
+                        </div>
+                        <div class="card summary-metric-card">
+                            <div class="text-muted"
+                                style="font-weight: 700; font-size: 0.75rem; letter-spacing: 0.5px;">DAYS LEFT</div>
+                            <div id="dash-days-left" class="text-stat-large">0</div>
+                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
+                                <div class="progress-bar-container" style="height: 5px; margin: 0; flex-grow: 1;">
+                                    <div id="dash-days-left-fill" class="progress-fill"
+                                        style="width: 50%; background: #0D382B;"></div>
+                                </div>
+                                <span class="text-muted" style="font-size: 0.72rem; white-space: nowrap;">this
+                                    month</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Section: Categories & Spending Trend Chart -->
+                    <div class="grid-2" style="margin-bottom: 20px;">
+                        <div class="card">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                                <div>
+                                    <h3 style="font-size: 1.15rem; margin-bottom: 2px;">Where did your money go?</h3>
+                                    <span class="text-muted" style="font-size: 0.8rem;">Your spending by category this
+                                        month</span>
+                                </div>
+                                <button class="btn btn-secondary btn-small" onclick="navigate('analytics')"
+                                    style="border: none; color: #1B6E4A; font-weight: 700; padding: 4px 8px; background: transparent; cursor: pointer;">View
+                                    All Categories →</button>
+                            </div>
+                            <div id="dash-categories-container">
+                                <div class="text-muted">No expenses recorded yet.</div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                                <div>
+                                    <h3 style="font-size: 1.15rem; margin-bottom: 2px;">Spending Trend</h3>
+                                    <span class="text-muted" style="font-size: 0.8rem;">Your daily spending this
+                                        month</span>
+                                </div>
+                                <span class="badge badge-sage">This Month</span>
+                            </div>
+                            <div style="position: relative; height: 260px; width: 100%;">
+                                <canvas id="dashTrendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Transactions -->
+                    <div class="card">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 2px;">Recent Transactions</h3>
+                                <span class="text-muted" style="font-size: 0.8rem;">Latest activities</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary btn-small" onclick="openExpenseModal()">+ Add
+                                    Expense</button>
+                                <button class="btn btn-secondary btn-small" onclick="navigate('transactions')">View
+                                    All</button>
+                            </div>
+                        </div>
+                        <div id="dash-recent-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                    </div>
+
+                    <!-- Bottom Quote Banner -->
+                    <div class="quote-banner" style="margin-top: 20px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-style: italic; color: #1A2E26; font-size: 0.88rem; font-weight: 500;">
+                                "A better you, one smarter financial choice at a time."
+                            </span>
+                        </div>
+                        <div
+                            style="color: #6E8279; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                            <span>Keep tracking</span> • <span>Keep growing</span> • <span>You got this</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: Transactions -->
+                <div id="view-transactions" class="view-panel" style="display: none;">
+                    <div class="card" style="margin-bottom: 18px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+                            <div>
+                                <h2 style="margin-bottom: 2px;">Transaction History</h2>
+                                <span id="tx-count-badge" class="text-muted" style="font-size: 0.85rem;">0 items</span>
+                            </div>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <span id="tx-total-badge" class="badge badge-sage">Total: ₹0</span>
+                                <button class="btn btn-primary btn-small" onclick="openExpenseModal()">+ Add
+                                    Expense</button>
+                            </div>
+                        </div>
+                        <!-- Filters -->
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <input type="text" id="tx-search" class="form-input"
+                                placeholder="Search description or category..." oninput="loadTransactions()"
+                                style="flex: 1; min-width: 200px;">
+                            <select id="tx-filter-cat" class="form-select" onchange="loadTransactions()"
+                                style="width: auto;"></select>
+                            <select id="tx-filter-pay" class="form-select" onchange="loadTransactions()"
+                                style="width: auto;">
+                                <option value="">All Payment Modes</option>
+                                <option value="UPI">UPI</option>
+                                <option value="Cash">Cash</option>
+                                <option value="Debit Card">Debit Card</option>
+                                <option value="Credit Card">Credit Card</option>
+                                <option value="Net Banking">Net Banking</option>
+                                <option value="Wallet">Wallet</option>
+                            </select>
+                            <select id="tx-filter-sort" class="form-select" onchange="loadTransactions()"
+                                style="width: auto;">
+                                <option value="NEWEST">Newest Date</option>
+                                <option value="OLDEST">Oldest Date</option>
+                                <option value="AMOUNT_DESC">Highest Amount</option>
+                                <option value="AMOUNT_ASC">Lowest Amount</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="card" style="overflow-x: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Category</th>
+                                    <th>Description</th>
+                                    <th>Payment Mode</th>
+                                    <th>Amount</th>
+                                    <th style="text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tx-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- View: Calendar -->
+                <div id="view-calendar" class="view-panel" style="display: none;">
+                    <div class="grid-2">
+                        <div class="card">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                                <h2 id="calendar-month-title">September 2026</h2>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn btn-secondary btn-small" onclick="prevCalendarMonth()">‹
+                                        Prev</button>
+                                    <button class="btn btn-secondary btn-small" onclick="nextCalendarMonth()">Next
+                                        ›</button>
+                                </div>
+                            </div>
+                            <div id="calendar-grid"
+                                style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center;">
+                            </div>
+                        </div>
+
+                        <!-- Day Drawer -->
+                        <div class="card">
+                            <h3 id="cal-selected-day-title">Daily Breakdown</h3>
+                            <p id="cal-selected-day-summary" class="badge badge-sage" style="margin: 8px 0 16px;">0
+                                transactions • Total: ₹0</p>
+                            <div id="cal-selected-day-list"
+                                style="display: flex; flex-direction: column; gap: 10px; max-height: 440px; overflow-y: auto;">
+                                <p class="text-muted">Click any day on the calendar to view transactions.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: Analytics -->
+                <div id="view-analytics" class="view-panel" style="display: none;">
+                    <div class="card"
+                        style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2>Spending Analytics &amp; Reports</h2>
+                            <p class="text-muted">Category distributions, payment share, and multi-period comparisons
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="analytics-month" class="form-select" onchange="loadAnalytics()"
+                                style="width: auto;"></select>
+                            <select id="analytics-year" class="form-select" onchange="loadAnalytics()"
+                                style="width: auto;"></select>
+                        </div>
+                    </div>
+
+                    <!-- Category & Payment Distribution -->
+                    <div class="grid-2" style="margin-bottom: 18px;">
+                        <div class="card">
+                            <h3>Category Breakdown</h3>
+                            <div style="position: relative; height: 250px; width: 100%; margin-top: 14px;">
+                                <canvas id="analyticsCategoryChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>Payment Method Distribution</h3>
+                            <div style="position: relative; height: 250px; width: 100%; margin-top: 14px;">
+                                <canvas id="analyticsPaymentChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Month Comparison Card -->
+                    <div class="card" style="margin-bottom: 18px;">
+                        <h3>Month-over-Month Comparison</h3>
+                        <div class="grid-3" style="margin: 14px 0;">
+                            <div class="card card-highlight-blue" style="padding: 14px;">
+                                <div class="text-muted" id="cmp-prev-title">Previous Month</div>
+                                <div id="cmp-prev-amt" class="text-stat-number">₹0</div>
+                            </div>
+                            <div class="card card-highlight-sage" style="padding: 14px;">
+                                <div class="text-muted" id="cmp-curr-title">Current Month</div>
+                                <div id="cmp-curr-amt" class="text-stat-number">₹0</div>
+                            </div>
+                            <div class="card" style="padding: 14px;">
+                                <div class="text-muted">Difference &amp; Change</div>
+                                <div id="cmp-diff-amt" class="text-stat-number">₹0</div>
+                            </div>
+                        </div>
+                        <div id="cmp-summary-banner" class="badge badge-sage"
+                            style="font-size: 0.9rem; padding: 10px 14px;"></div>
+                    </div>
+
+                    <!-- Yearly Analysis Chart -->
+                    <div class="card">
+                        <h3>12-Month Yearly Spending Overview</h3>
+                        <div style="position: relative; height: 260px; width: 100%; margin-top: 14px;">
+                            <canvas id="analyticsYearlyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: Budget -->
+                <div id="view-budget" class="view-panel" style="display: none;">
+                    <div class="card"
+                        style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2>Budget Management &amp; Controls</h2>
+                            <p class="text-muted">Smart daily allocations, month-end projections, and category limits
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="number" id="budget-input-total" class="form-input" placeholder="Set Budget (₹)"
+                                style="width: 150px;">
+                            <button class="btn btn-primary" onclick="saveOverallBudget()">Set Budget</button>
+                        </div>
+                    </div>
+
+                    <!-- Smart Calculations Grid -->
+                    <div class="grid-4" style="margin-bottom: 18px;">
+                        <div class="card card-highlight-blue">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">MONTHLY BUDGET</div>
+                            <div id="bgt-card-budget" class="text-stat-large">₹0</div>
+                        </div>
+                        <div class="card card-highlight-peach">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">AMOUNT SPENT</div>
+                            <div id="bgt-card-spent" class="text-stat-large">₹0</div>
+                        </div>
+                        <div class="card card-highlight-sage">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">REMAINING</div>
+                            <div id="bgt-card-remaining" class="text-stat-large">₹0</div>
+                        </div>
+                        <div class="card">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">RECOMMENDED / DAY
+                            </div>
+                            <div id="bgt-card-daily" class="text-stat-large">₹0</div>
+                        </div>
+                    </div>
+
+                    <!-- Projections & Alerts -->
+                    <div class="card card-highlight-lavender" style="margin-bottom: 18px;">
+                        <h3 style="margin-bottom: 8px;">Smart Month-End Mathematical Projection</h3>
+                        <p id="bgt-projection-insight" style="font-weight: 700; font-size: 1rem; line-height: 1.6;"></p>
+                        <p class="text-muted" style="font-size: 0.8rem; margin-top: 4px;">* Projection = Current Spent +
+                            (Average Daily Spent × Days Remaining).</p>
+                    </div>
+
+                    <!-- Category Budgets -->
+                    <div class="card">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                            <h3>Category Spending Limits</h3>
+                            <button class="btn btn-secondary btn-small" onclick="saveCategoryLimits()">Save
+                                Limits</button>
+                        </div>
+                        <div id="budget-categories-list" style="display: flex; flex-direction: column; gap: 12px;">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: Income -->
+                <div id="view-income" class="view-panel" style="display: none;">
+                    <div class="grid-3" style="margin-bottom: 18px;">
+                        <div class="card card-highlight-sage">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">TOTAL INCOME</div>
+                            <div id="inc-total-val" class="text-stat-large">₹0</div>
+                        </div>
+                        <div class="card card-highlight-peach">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">TOTAL EXPENSES</div>
+                            <div id="inc-expense-val" class="text-stat-large">₹0</div>
+                        </div>
+                        <div class="card card-highlight-blue">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">NET SAVINGS BALANCE
+                            </div>
+                            <div id="inc-balance-val" class="text-stat-large">₹0</div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="card">
+                            <h3>Record New Income</h3>
+                            <form onsubmit="handleAddIncomeSubmit(event)" style="margin-top: 14px;">
+                                <div class="form-group">
+                                    <label class="form-label">Amount (₹)</label>
+                                    <input type="number" step="0.01" id="inc-amount" class="form-input"
+                                        placeholder="0.00" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Source</label>
+                                    <select id="inc-source" class="form-select">
+                                        <option value="Salary">Salary</option>
+                                        <option value="Freelancing">Freelancing</option>
+                                        <option value="Allowance">Allowance</option>
+                                        <option value="Business">Business</option>
+                                        <option value="Investments">Investments</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Date</label>
+                                    <input type="date" id="inc-date" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Description / Note</label>
+                                    <input type="text" id="inc-desc" class="form-input"
+                                        placeholder="e.g. Monthly salary, stipend">
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%;">+ Record
+                                    Income</button>
+                            </form>
+                        </div>
+                        <div class="card">
+                            <h3>Income Records</h3>
+                            <div id="income-records-list"
+                                style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow-y: auto;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: Recurring -->
+                <div id="view-recurring" class="view-panel" style="display: none;">
+                    <div class="grid-2">
+                        <div class="card">
+                            <h3>Add Repeating Bill / Subscription</h3>
+                            <form onsubmit="handleAddRecurringSubmit(event)" style="margin-top: 14px;">
+                                <div class="form-group">
+                                    <label class="form-label">Title</label>
+                                    <input type="text" id="rec-title" class="form-input"
+                                        placeholder="e.g. Netflix, Rent, Spotify, Wi-Fi" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Amount (₹)</label>
+                                    <input type="number" step="0.01" id="rec-amount" class="form-input"
+                                        placeholder="0.00" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Category</label>
+                                    <select id="rec-category" class="form-select"></select>
+                                </div>
+                                <div class="grid-2">
+                                    <div class="form-group">
+                                        <label class="form-label">Frequency</label>
+                                        <select id="rec-frequency" class="form-select">
+                                            <option value="MONTHLY">Monthly</option>
+                                            <option value="WEEKLY">Weekly</option>
+                                            <option value="YEARLY">Yearly</option>
+                                            <option value="DAILY">Daily</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Payment Mode</label>
+                                        <select id="rec-payment" class="form-select">
+                                            <option value="UPI">UPI</option>
+                                            <option value="Debit Card">Debit Card</option>
+                                            <option value="Credit Card">Credit Card</option>
+                                            <option value="Net Banking">Net Banking</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Next Due Date</label>
+                                    <input type="date" id="rec-date" class="form-input" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%;">+ Save Recurring
+                                    Bill</button>
+                            </form>
+                        </div>
+
+                        <div class="card">
+                            <h3>Active Subscriptions</h3>
+                            <div id="recurring-list"
+                                style="margin-top: 14px; display: flex; flex-direction: column; gap: 10px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: Reports -->
+                <div id="view-reports" class="view-panel" style="display: none;">
+                    <div class="card"
+                        style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2>Financial Statements &amp; Exports</h2>
+                            <p class="text-muted">Download printable PDF statements or spreadsheet CSVs</p>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary" onclick="downloadReportPdf()">📄 Download PDF</button>
+                            <button class="btn btn-secondary" onclick="downloadReportCsv()">📊 Export CSV</button>
+                        </div>
+                    </div>
+
+                    <!-- Statement Preview -->
+                    <div class="card" style="max-width: 680px; margin: 0 auto; padding: 32px;">
+                        <div
+                            style="background: #E8F5EF; padding: 16px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <img src="/logo.png" alt="ExPense Book"
+                                    style="width: 38px; height: 38px; border-radius: 8px; object-fit: contain;">
+                                <div>
+                                    <img src="/brand-wordmark-dark.png" alt="ExPense Book"
+                                        style="height: 24px; display: block; margin-bottom: 2px; object-fit: contain;">
+                                    <span
+                                        style="font-size: 0.72rem; color: #2D6B50; font-weight: 700; letter-spacing: 0.5px;">OFFICIAL
+                                        FINANCIAL STATEMENT</span>
+                                </div>
+                            </div>
+                            <span id="rep-period-title" class="badge badge-sage">September 2026</span>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 14px;">
+                            <div
+                                style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+                                <span class="text-muted">Total Expenses:</span>
+                                <span id="rep-total-exp" style="font-weight: 800; font-size: 1.2rem;">₹0</span>
+                            </div>
+                            <div
+                                style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+                                <span class="text-muted">Daily Average:</span>
+                                <span id="rep-daily-avg" style="font-weight: 700;">₹0 / day</span>
+                            </div>
+                            <div
+                                style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+                                <span class="text-muted">Top Spending Category:</span>
+                                <span id="rep-top-cat" style="font-weight: 700;">-</span>
+                            </div>
+                            <div
+                                style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+                                <span class="text-muted">Top Payment Method:</span>
+                                <span id="rep-top-pay" style="font-weight: 700;">-</span>
+                            </div>
+                            <div
+                                style="display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+                                <span class="text-muted">Previous Month:</span>
+                                <span id="rep-prev-spent" style="font-weight: 700;">₹0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: AI Assistant -->
+                <div id="view-ai-assistant" class="view-panel" style="display: none;">
+                    <div class="card ai-assistant-header-card" style="margin-bottom: 16px; padding: 18px 24px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 14px;">
+                                <div class="ai-avatar-badge">
+                                    <span>✨</span>
+                                </div>
+                                <div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <h2
+                                            style="font-size: 1.35rem; font-weight: 800; color: var(--text-charcoal); margin: 0;">
+                                            PennyWise AI Assistant</h2>
+                                        <span id="ai-model-badge" class="badge badge-sage"
+                                            style="font-size: 0.72rem; padding: 3px 8px;">🟢 Gemini 2.5 Flash</span>
+                                    </div>
+                                    <p class="text-muted" style="font-size: 0.82rem; margin-top: 2px;">Your personal
+                                        finance co-pilot!</p>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button class="btn btn-secondary btn-small" onclick="clearAiChat()"
+                                    title="Reset conversation">
+                                    🗑️ Clear Chat
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Prompt Chips -->
+                    <div class="card" style="margin-bottom: 16px; padding: 12px 18px;">
+                        <div class="text-muted"
+                            style="font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">
+                            💡 Quick Questions &amp; Insights:
+                        </div>
+                        <div class="ai-chips-container">
+                            <button class="ai-chip" onclick="handleQuickPrompt('How much have I spent this month?')">📊
+                                Total spent this month</button>
+                            <button class="ai-chip"
+                                onclick="handleQuickPrompt('Where did most of my money go? Breakdown my top categories.')">🍔
+                                Top spending categories</button>
+                            <button class="ai-chip"
+                                onclick="handleQuickPrompt('Am I within my budget and what is my projected month-end spend?')">🎯
+                                Budget &amp; Projections</button>
+                            <button class="ai-chip"
+                                onclick="handleQuickPrompt('How can I save ₹2,000 before this month ends?')">💰
+                                Actionable savings tips</button>
+                            <button class="ai-chip"
+                                onclick="handleQuickPrompt('How many days are left in this month and what is my safe daily spend?')">⏳
+                                Days left &amp; safe daily spend</button>
+                            <button class="ai-chip"
+                                onclick="handleQuickPrompt('Can you explain the 50/30/20 budgeting rule with examples?')">🧠
+                                Explain 50/30/20 rule</button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Stream Window -->
+                    <div class="card ai-chat-card">
+                        <div id="ai-chat-messages" class="ai-chat-messages">
+                            <!-- Populated dynamically via JS -->
+                        </div>
+
+                        <!-- Typing Indicator -->
+                        <div id="ai-typing-indicator" class="ai-typing-indicator" style="display: none;">
+                            <div class="ai-typing-avatar">✨</div>
+                            <div class="ai-typing-bubble">
+                                <span>PennyWise is thinking</span>
+                                <span class="typing-dot"></span>
+                                <span class="typing-dot"></span>
+                                <span class="typing-dot"></span>
+                            </div>
+                        </div>
+
+                        <!-- Chat Input Box -->
+                        <div class="ai-chat-input-area">
+                            <textarea id="ai-user-input" class="ai-chat-textarea" placeholder="Ask Anything" rows="1"
+                                onkeydown="handleAiInputKeydown(event)"></textarea>
+                            <button id="ai-send-btn" class="btn btn-primary ai-send-button"
+                                onclick="sendAiUserMessage()" title="Send Message">
+                                <span>Send</span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- View: Settings -->
+                <div id="view-settings" class="view-panel" style="display: none;">
+                    <div class="card" style="margin-bottom: 18px;">
+                        <h3>Financial Mode Switcher</h3>
+                        <p class="text-muted" style="margin-bottom: 14px;">Switch seamlessly between tracking only or
+                            tracking with a monthly budget limit.</p>
+                        <div class="grid-2">
+                            <div id="settings-mode-track" class="card" onclick="setSettingMode('TRACK_ONLY')"
+                                style="cursor: pointer;">
+                                <h4>Just Track Expenses</h4>
+                                <p class="text-muted">Clean tracking without budget pressure.</p>
+                            </div>
+                            <div id="settings-mode-budget" class="card" onclick="setSettingMode('TRACK_AND_BUDGET')"
+                                style="cursor: pointer;">
+                                <h4>Track + Monthly Budget</h4>
+                                <p class="text-muted">Track expenses plus monthly budget controls &amp; projections.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2" style="margin-bottom: 18px;">
+                        <div class="card">
+                            <h3>Profile Preferences</h3>
+                            <form onsubmit="handleUpdateProfile(event)" style="margin-top: 14px;">
+                                <div class="form-group">
+                                    <label class="form-label">Full Name</label>
+                                    <input type="text" id="settings-name" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Currency Symbol</label>
+                                    <select id="settings-currency" class="form-select">
+                                        <option value="₹">₹ (INR)</option>
+                                        <option value="$">$ (USD)</option>
+                                        <option value="€">€ (EUR)</option>
+                                        <option value="£">£ (GBP)</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-secondary">Save Profile</button>
+                            </form>
+                        </div>
+                        <div class="card">
+                            <h3>Change Password</h3>
+                            <form onsubmit="handleChangePassword(event)" style="margin-top: 14px;">
+                                <div class="form-group">
+                                    <label class="form-label">Current Password</label>
+                                    <input type="password" id="settings-cur-pass" class="form-input" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">New Password</label>
+                                    <input type="password" id="settings-new-pass" class="form-input" required
+                                        minlength="6">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Confirm New Password</label>
+                                    <input type="password" id="settings-conf-pass" class="form-input" required>
+                                </div>
+                                <button type="submit" class="btn btn-secondary">Update Password</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Custom Categories</h3>
+                        <p class="text-muted" style="margin-bottom: 12px;">Add custom categories suited to your personal
+                            lifestyle.</p>
+                        <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+                            <input type="text" id="new-cat-name" class="form-input" placeholder="Category Name"
+                                style="flex: 1; min-width: 180px;">
+                            <select id="new-cat-color" class="form-select" style="width: 140px;">
+                                <option value="#78BFA0">Sage Green</option>
+                                <option value="#A9CFE0">Powder Blue</option>
+                                <option value="#F5C6A5">Peach</option>
+                                <option value="#C9B9E8">Lavender</option>
+                                <option value="#E88C8C">Coral</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="addCustomCategory()">+ Add Category</button>
+                        </div>
+                        <div id="settings-categories-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    </div>
+                </div>
+
+                <!-- View: Admin -->
+                <div id="view-admin" class="view-panel" style="display: none;">
+                    <div class="card" style="margin-bottom: 18px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                            <div>
+                                <h2 style="margin-bottom: 2px;">System Governance &amp; Administration</h2>
+                                <p class="text-muted" style="margin: 0;">Application statistics and user account
+                                    management (User financial details remain private per Section 32).</p>
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-primary btn-small" onclick="openExpenseModal()">+ Add
+                                    Expense</button>
+                                <button class="btn btn-secondary btn-small" onclick="navigate('dashboard')">🏠
+                                    Dashboard</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid-3" style="margin-bottom: 18px;">
+                        <div class="card card-highlight-blue">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">TOTAL USERS</div>
+                            <div id="admin-total-users" class="text-stat-large">0</div>
+                        </div>
+                        <div class="card card-highlight-sage">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">ACTIVE ACCOUNTS</div>
+                            <div id="admin-active-users" class="text-stat-large">0</div>
+                        </div>
+                        <div class="card card-highlight-peach">
+                            <div class="text-muted" style="font-weight: 700; font-size: 0.75rem;">SYSTEM CATEGORIES
+                            </div>
+                            <div id="admin-total-cats" class="text-stat-large">16</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Registered Users Directory</h3>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Full Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Mode</th>
+                                    <th>Status</th>
+                                    <th style="text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-table"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Database Engine & Connectivity (Admin Only) -->
+                    <div class="card" style="margin-top: 18px;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <h3>🗄️ Database Engine &amp; Connectivity (Admin Only)</h3>
+                                <p class="text-muted">Configure active storage engine: zero-configuration embedded
+                                    SQLite or external MySQL 8.0 server.</p>
+                            </div>
+                            <span id="db-status-badge" class="badge badge-sage">Checking...</span>
+                        </div>
+
+                        <div id="db-conn-alert" class="badge"
+                            style="display: none; margin-bottom: 14px; width: 100%; padding: 10px 14px;"></div>
+
+                        <div
+                            style="background: #F8FAF9; border: 1px solid var(--border-color); border-radius: 12px; padding: 18px; margin-bottom: 18px;">
+                            <label class="form-label"
+                                style="font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; display: block;">Select
+                                Storage Backend:</label>
+                            <div style="display: flex; gap: 28px; flex-wrap: wrap;">
+                                <label
+                                    style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+                                    <input type="radio" name="db-engine-choice" value="sqlite" id="db-choice-sqlite"
+                                        onchange="onDbEngineChange('sqlite')">
+                                    <span>📦 SQLite (Embedded Local File — No Password Required)</span>
+                                </label>
+                                <label
+                                    style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600;">
+                                    <input type="radio" name="db-engine-choice" value="mysql" id="db-choice-mysql"
+                                        onchange="onDbEngineChange('mysql')">
+                                    <span>🐬 MySQL 8.0 Server</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- SQLite Panel -->
+                        <div id="db-sqlite-panel" style="display: none; padding: 6px 0 12px;">
+                            <div class="badge badge-sage"
+                                style="margin-bottom: 16px; padding: 12px 18px; font-size: 0.9rem; width: 100%; line-height: 1.5; justify-content: flex-start;">
+                                <span>✅ <strong>SQLite active:</strong> All records are saved locally in
+                                    <code>expensebook.db</code>. No MySQL server, port, or password needed.</span>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="saveSqliteConfig()">💾 Save SQLite as
+                                Default</button>
+                        </div>
+
+                        <!-- MySQL Panel -->
+                        <div id="db-mysql-panel" style="display: none;">
+                            <form onsubmit="handleSaveDatabaseConfig(event)">
+                                <div class="grid-2">
+                                    <div class="form-group">
+                                        <label class="form-label">Host</label>
+                                        <input type="text" id="db-host" class="form-input" value="localhost" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Port</label>
+                                        <input type="number" id="db-port" class="form-input" value="3306" required>
+                                    </div>
+                                </div>
+                                <div class="grid-3">
+                                    <div class="form-group">
+                                        <label class="form-label">Database Name</label>
+                                        <input type="text" id="db-name" class="form-input" value="expensebook" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Username</label>
+                                        <input type="text" id="db-user" class="form-input" value="root" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Password</label>
+                                        <input type="password" id="db-pass" class="form-input"
+                                            placeholder="Enter MySQL password">
+                                    </div>
+                                </div>
+                                <div
+                                    style="display: flex; gap: 10px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+                                    <button type="button" class="btn btn-secondary"
+                                        onclick="handleTestDatabaseConfig()">⚡ Test Connection</button>
+                                    <button type="submit" class="btn btn-primary">💾 Save &amp; Connect MySQL</button>
+                                    <span id="db-test-result"
+                                        style="font-size: 0.85rem; font-weight: 700; margin-left: 6px;"></span>
+                                </div>
+                            </form>
+                            <div
+                                style="background: #F8FAF9; border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-top: 16px;">
+                                <h4 style="font-size: 0.85rem; margin-bottom: 6px; color: #2D6B50;">💡 MySQL Setup Note:
+                                </h4>
+                                <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6; margin: 0;">
+                                    If you forgot your MySQL root password, simply select <strong>SQLite</strong> above
+                                    to continue using ExPense Book smoothly without any password or server requirements.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 🤖 AI Assistant & Gemini API Configuration (Admin Only) -->
+                    <div class="card" style="margin-top: 18px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <h3>🤖 AI Assistant &amp; Gemini API Configuration (Admin Only)</h3>
+                                <p class="text-muted">Configure system-wide Google Gemini API Key for PennyWise AI. When active, all authenticated users enjoy Gemini AI intelligence.</p>
+                            </div>
+                            <span id="admin-ai-status-badge" class="badge badge-sage">Checking...</span>
+                        </div>
+
+                        <div id="admin-ai-alert" class="badge" style="display: none; margin-bottom: 14px; width: 100%; padding: 10px 14px;"></div>
+
+                        <div style="background: #E8F5EF; border: 1px solid #C2E2D3; padding: 14px 16px; margin-bottom: 18px; border-radius: 12px;">
+                            <div style="display: flex; align-items: flex-start; gap: 10px; font-size: 0.85rem; color: #0D382B;">
+                                <span style="font-size: 1.25rem;">✨</span>
+                                <div>
+                                    <strong>System-Wide AI Powered by Google Gemini:</strong>
+                                    When an API key is configured here, all registered users automatically receive deep, context-aware financial advice and general AI answers via Google's Gemini models.
+                                    If no key is configured, the application automatically uses ExPenseBook's built-in smart financial rule engine.
+                                    <div style="margin-top: 6px;">
+                                        👉 Get a 100% free Gemini API key in 30 seconds (no credit card required) at
+                                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer"
+                                            style="color: #0D382B; font-weight: 700; text-decoration: underline;">Google AI Studio</a>.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <form onsubmit="handleSaveAdminAiKey(event)">
+                            <div class="form-group">
+                                <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span>Google Gemini API Key</span>
+                                    <span id="admin-ai-key-masked" style="font-size: 0.8rem; color: #2D6B50; font-weight: 700;"></span>
+                                </label>
+                                <div style="position: relative;">
+                                    <input type="password" id="admin-ai-key-input" class="form-input"
+                                        placeholder="Enter Gemini API key (e.g. AIzaSy...)" style="padding-right: 44px;">
+                                    <button type="button" onclick="toggleAdminAiKeyVisibility()"
+                                        style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1rem;" title="Show/Hide Key">👁️</button>
+                                </div>
+                                <span class="text-muted" style="font-size: 0.75rem; margin-top: 5px; display: block;">Saved securely to server configuration (<code>db.properties</code>) and activated immediately for all users.</span>
+                            </div>
+
+                            <div style="display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-secondary" onclick="handleTestAdminAiKey()">⚡ Test API Key</button>
+                                <button type="submit" class="btn btn-primary">💾 Save &amp; Activate Key</button>
+                                <button type="button" class="btn btn-danger btn-small" onclick="handleClearAdminAiKey()" style="margin-left: auto;">🗑️ Remove Key</button>
+                                <div id="admin-ai-test-result" style="font-size: 0.85rem; font-weight: 700; width: 100%; margin-top: 6px;"></div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-nav-bottom">
+        <a href="javascript:void(0)" class="mobile-nav-item active" onclick="navigate('dashboard')">
+            <span class="nav-icon">🏠</span><span class="nav-label">Dashboard</span>
+        </a>
+        <a href="javascript:void(0)" class="mobile-nav-item mobile-nav-add" onclick="openExpenseModal()">
+            <span class="nav-icon">➕</span><span class="nav-label">Add</span>
+        </a>
+        <a href="javascript:void(0)" class="mobile-nav-item" onclick="navigate('transactions')">
+            <span class="nav-icon">📜</span><span class="nav-label">Activity</span>
+        </a>
+        <a href="javascript:void(0)" class="mobile-nav-item" onclick="navigate('calendar')">
+            <span class="nav-icon">📅</span><span class="nav-label">Calendar</span>
+        </a>
+        <a href="javascript:void(0)" class="mobile-nav-item" onclick="navigate('analytics')">
+            <span class="nav-icon">📊</span><span class="nav-label">Insights</span>
+        </a>
+    </nav>
+
+    <!-- Modal: Add / Edit Expense -->
+    <div id="expense-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <div class="modal-drag-handle"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 id="modal-expense-title">Record Expense</h3>
+                <button onclick="closeExpenseModal()"
+                    style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted);">✕</button>
+            </div>
+            <form onsubmit="handleSaveExpense(event)">
+                <input type="hidden" id="modal-expense-id">
+                <div class="form-group">
+                    <label class="form-label">Amount (₹)</label>
+                    <input type="number" step="0.01" id="modal-expense-amount" class="form-input" placeholder="0.00"
+                        required style="font-size: 1.3rem; font-weight: 700;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Category</label>
+                    <select id="modal-expense-category" class="form-select" required></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Payment Method</label>
+                    <select id="modal-expense-payment" class="form-select" required>
+                        <option value="UPI">UPI</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Debit Card">Debit Card</option>
+                        <option value="Credit Card">Credit Card</option>
+                        <option value="Net Banking">Net Banking</option>
+                        <option value="Wallet">Wallet</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Expense Date</label>
+                    <input type="date" id="modal-expense-date" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description / Note</label>
+                    <input type="text" id="modal-expense-desc" class="form-input"
+                        placeholder="Optional (defaults to selected category)">
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="modal-btn-submit">Save Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Floating AI Assistant FAB -->
+    <div id="ai-floating-fab" class="ai-floating-fab" onclick="toggleFloatingAi()" title="Ask PennyWise AI" style="display: none;">
+        <span class="ai-fab-sparkle">✨</span>
+        <span class="ai-fab-text">Ask AI</span>
+    </div>
+
+    <!-- Floating AI Drawer Window -->
+    <div id="ai-floating-drawer" class="ai-floating-drawer" style="display: none;">
+        <div class="ai-drawer-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 1.2rem;">✨</span>
+                <strong style="color: #FFFFFF; font-size: 0.95rem;">PennyWise AI</strong>
+                <span id="ai-drawer-badge" class="badge"
+                    style="background: rgba(255,255,255,0.18); color: #FFFFFF; font-size: 0.65rem; padding: 2px 6px;">Gemini 2.5 Flash</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <button onclick="navigate('ai-assistant'); toggleFloatingAi();" class="ai-drawer-icon-btn"
+                    title="Open Full Screen">⛶</button>
+                <button onclick="toggleFloatingAi()" class="ai-drawer-icon-btn" title="Close">✕</button>
+            </div>
+        </div>
+        <div id="ai-drawer-messages" class="ai-drawer-messages"></div>
+        <div id="ai-drawer-typing" class="ai-typing-indicator" style="display: none; padding: 8px 12px;">
+            <div class="ai-typing-avatar" style="width: 24px; height: 24px; font-size: 0.8rem;">✨</div>
+            <div class="ai-typing-bubble" style="font-size: 0.78rem; padding: 6px 12px;">
+                <span>Thinking</span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+            </div>
+        </div>
+        <div class="ai-drawer-input-bar">
+            <input type="text" id="ai-drawer-input" class="form-input" placeholder="Ask a financial or general query..."
+                onkeydown="handleAiDrawerKeydown(event)" style="font-size: 0.85rem; padding: 8px 12px;">
+            <button class="btn btn-primary btn-small" onclick="sendAiDrawerMessage()" title="Send">➔</button>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script src="/app.js"></script>
+</body>
+
+</html>

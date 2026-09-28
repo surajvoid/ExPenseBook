@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<HBox xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.expensebook.controller.CalendarController"
+      spacing="18.0" style="-fx-padding: 4px;">
+
+    <!-- Left Calendar Grid Card -->
+    <VBox spacing="14.0" styleClass="card" HBox.hgrow="ALWAYS">
+        <!-- Calendar Header with Month Navigation -->
+        <HBox alignment="CENTER_LEFT" spacing="12.0">
+            <Label fx:id="currentMonthYearLabel" text="September 2026" styleClass="text-h2"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <HBox spacing="8.0">
+                <Button fx:id="btnPrevMonth" text="‹ Previous" onAction="#handlePrevMonth" styleClass="btn-secondary, btn-pill-small"/>
+                <Button fx:id="btnNextMonth" text="Next ›" onAction="#handleNextMonth" styleClass="btn-secondary, btn-pill-small"/>
+            </HBox>
+        </HBox>
+
+        <Separator/>
+
+        <!-- Calendar Grid -->
+        <GridPane fx:id="calendarGrid" hgap="10.0" vgap="10.0" VBox.vgrow="ALWAYS" alignment="CENTER">
+            <columnConstraints>
+                <ColumnConstraints percentWidth="14.28" halignment="CENTER"/>
+                <ColumnConstraints percentWidth="14.28" halignment="CENTER"/>
+                <ColumnConstraints percentWidth="14.28" halignment="CENTER"/>
+                <ColumnConstraints percentWidth="14.28" halignment="CENTER"/>
+                <ColumnConstraints percentWidth="14.28" halignment="CENTER"/>
+                <ColumnConstraints percentWidth="14.28" halignment="CENTER"/>
+                <ColumnConstraints percentWidth="14.28" halignment="CENTER"/>
+            </columnConstraints>
+        </GridPane>
+    </VBox>
+
+    <!-- Right Side Drawer: Selected Day Transaction Details -->
+    <VBox spacing="14.0" styleClass="card" prefWidth="380.0" minWidth="340.0">
+        <VBox spacing="4.0">
+            <Label text="Daily Breakdown" styleClass="text-stat-label"/>
+            <Label fx:id="selectedDateLabel" text="07 Sep 2026" styleClass="text-h2"/>
+            <Label fx:id="daySummaryLabel" text="0 transactions • Total: ₹0" styleClass="badge, badge-sage"/>
+        </VBox>
+
+        <Separator/>
+
+        <ScrollPane fx:id="dayTransactionsScroll" fitToWidth="true" VBox.vgrow="ALWAYS" style="-fx-background-color: transparent; -fx-background: transparent;">
+            <VBox fx:id="dayTransactionsContainer" spacing="10.0"/>
+        </ScrollPane>
+    </VBox>
+
+</HBox>

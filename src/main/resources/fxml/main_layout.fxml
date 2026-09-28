@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.shape.Circle?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.expensebook.controller.MainLayoutController"
+            prefWidth="1200.0" prefHeight="780.0" styleClass="content-area">
+
+    <!-- Left Sidebar -->
+    <left>
+        <VBox prefWidth="240.0" spacing="16.0" styleClass="sidebar">
+            <!-- Brand -->
+            <HBox alignment="CENTER_LEFT" spacing="12.0" style="-fx-padding: 6 8 10 8;">
+                <StackPane prefWidth="38.0" prefHeight="38.0">
+                    <Circle radius="19.0" fill="#78BFA0"/>
+                    <Label text="EB" style="-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #FFFFFF;"/>
+                </StackPane>
+                <VBox spacing="1.0">
+                    <Label fx:id="brandTitle" text="ExPense Book" styleClass="sidebar-brand-title"/>
+                    <Label text="TRACK â€¢ ANALYSE â€¢ CONTROL" styleClass="sidebar-brand-tagline"/>
+                </VBox>
+            </HBox>
+
+            <Separator/>
+
+            <!-- Navigation Links -->
+            <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS" style="-fx-background-color: transparent; -fx-background: transparent; -fx-padding: 0;">
+                <VBox spacing="4.0">
+                    <Label text="MAIN MENU" styleClass="nav-section-title"/>
+                    <Button fx:id="btnNavDashboard" text="ðŸ   Dashboard" onAction="#handleNavDashboard" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavAddExpense" text="âž•  Add Expense" onAction="#handleNavAddExpense" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavTransactions" text="ðŸ“œ  Transactions" onAction="#handleNavTransactions" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavCalendar" text="ðŸ“…  Calendar" onAction="#handleNavCalendar" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavAnalytics" text="ðŸ“Š  Analytics" onAction="#handleNavAnalytics" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavBudget" text="ðŸ’°  Budget" onAction="#handleNavBudget" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavIncome" text="ðŸ’µ  Income" onAction="#handleNavIncome" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavRecurring" text="ðŸ”  Recurring" onAction="#handleNavRecurring" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavReports" text="ðŸ“„  Reports" onAction="#handleNavReports" maxWidth="Infinity" styleClass="nav-button"/>
+
+                    <Label text="PREFERENCES" styleClass="nav-section-title"/>
+                    <Button fx:id="btnNavSettings" text="âš™ï¸  Settings" onAction="#handleNavSettings" maxWidth="Infinity" styleClass="nav-button"/>
+                    <Button fx:id="btnNavAdmin" text="ðŸ›¡ï¸  Admin Panel" onAction="#handleNavAdmin" maxWidth="Infinity" styleClass="nav-button" visible="false" managed="false"/>
+                </VBox>
+            </ScrollPane>
+
+            <!-- Bottom User Profile Card -->
+            <VBox spacing="8.0">
+                <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="user-profile-card">
+                    <StackPane prefWidth="32.0" prefHeight="32.0">
+                        <Circle radius="16.0" fill="#E6F3EE"/>
+                        <Label text="ðŸ‘¤" style="-fx-font-size: 14px;"/>
+                    </StackPane>
+                    <VBox spacing="1.0" HBox.hgrow="ALWAYS">
+                        <Label fx:id="sidebarUserName" text="Suraj" style="-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #26332F;"/>
+                        <Label fx:id="sidebarUserEmail" text="suraj@example.com" styleClass="text-muted" style="-fx-font-size: 10px;"/>
+                        <Label fx:id="sidebarUserMode" text="Track Only" style="-fx-font-size: 10px; -fx-font-weight: bold; -fx-text-fill: #78BFA0;"/>
+                    </VBox>
+                </HBox>
+                <Button fx:id="btnNavLogout" text="ðŸšª  Sign Out" onAction="#handleLogout" maxWidth="Infinity" styleClass="btn-danger, btn-pill-small"/>
+            </VBox>
+        </VBox>
+    </left>
+
+    <!-- Top Header & Main Content Area -->
+    <center>
+        <BorderPane>
+            <!-- Top Header Bar -->
+            <top>
+                <HBox alignment="CENTER_LEFT" spacing="16.0" style="-fx-background-color: #FFFFFF; -fx-border-color: #F0EAE1; -fx-border-width: 0 0 1 0; -fx-padding: 14 28 14 28;">
+                    <VBox spacing="2.0">
+                        <Label fx:id="userGreetingLabel" text="Good Morning, Suraj ðŸ‘‹" styleClass="text-h2"/>
+                        <Label fx:id="currentPeriodLabel" text="September 2026" styleClass="text-muted"/>
+                    </VBox>
+
+                    <Region HBox.hgrow="ALWAYS"/>
+
+                    <HBox alignment="CENTER" spacing="12.0">
+                        <Label fx:id="modeBadgeLabel" text="ðŸ“ Track Only Mode" styleClass="badge, badge-sage"/>
+                        <Label fx:id="dbStatusBadge" text="MySQL 8.0" styleClass="badge, badge-blue"/>
+                        <Button fx:id="btnAddExpenseHeader" text="+ Add Expense" onAction="#handleNavAddExpense" styleClass="btn-primary"/>
+                    </HBox>
+                </HBox>
+            </top>
+
+            <!-- Dynamic Content Area -->
+            <center>
+                <StackPane fx:id="contentArea" style="-fx-background-color: #FFF9EF; -fx-padding: 24px;"/>
+            </center>
+        </BorderPane>
+    </center>
+
+</BorderPane>
+

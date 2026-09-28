@@ -1,0 +1,183 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<ScrollPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.expensebook.controller.SettingsController"
+            fitToWidth="true" style="-fx-background-color: transparent; -fx-background: transparent;">
+
+    <VBox spacing="18.0" style="-fx-padding: 4px;">
+
+        <!-- Header -->
+        <VBox spacing="2.0" styleClass="card">
+            <Label text="System Settings &amp; Preferences" styleClass="text-h2"/>
+            <Label text="Manage your profile, financial mode, custom categories, and database connectivity" styleClass="text-muted"/>
+        </VBox>
+
+        <!-- Section 1: Financial Mode Switcher -->
+        <VBox spacing="14.0" styleClass="card">
+            <Label text="Financial Mode Switching" styleClass="text-h3"/>
+            <Label text="Switch between tracking expenses only or tracking with a monthly budget limit." styleClass="text-muted"/>
+            <Separator/>
+
+            <fx:define>
+                <ToggleGroup fx:id="modeToggleGroup"/>
+            </fx:define>
+
+            <HBox spacing="18.0">
+                <VBox spacing="6.0" styleClass="card, card-highlight-sage" HBox.hgrow="ALWAYS">
+                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                        <RadioButton fx:id="radioModeTrackOnly" toggleGroup="$modeToggleGroup"/>
+                        <Label text="ðŸ“ Just Track My Expenses" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    </HBox>
+                    <Label text="Record and analyse your spending without setting a budget." styleClass="text-muted"/>
+                </VBox>
+
+                <VBox spacing="6.0" styleClass="card, card-highlight-blue" HBox.hgrow="ALWAYS">
+                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                        <RadioButton fx:id="radioModeBudget" toggleGroup="$modeToggleGroup"/>
+                        <Label text="ðŸ’° Track + Monthly Budget" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    </HBox>
+                    <Label text="Track expenses plus manage monthly budget limits and projections." styleClass="text-muted"/>
+                </VBox>
+            </HBox>
+
+            <HBox alignment="CENTER_RIGHT">
+                <Button fx:id="btnSaveMode" text="Apply Financial Mode" onAction="#handleSaveMode" styleClass="btn-primary"/>
+            </HBox>
+        </VBox>
+
+        <!-- Section 2: Profile & Password -->
+        <HBox spacing="18.0">
+            <!-- Profile Details -->
+            <VBox spacing="14.0" styleClass="card" HBox.hgrow="ALWAYS">
+                <Label text="Personal Profile" styleClass="text-h3"/>
+                <Separator/>
+
+                <VBox spacing="10.0">
+                    <VBox spacing="4.0">
+                        <Label text="Full Name" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                        <TextField fx:id="profileNameField" styleClass="text-input"/>
+                    </VBox>
+
+                    <VBox spacing="4.0">
+                        <Label text="Email Address" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                        <TextField fx:id="profileEmailField" styleClass="text-input"/>
+                    </VBox>
+
+                    <VBox spacing="4.0">
+                        <Label text="Preferred Currency Symbol" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                        <ComboBox fx:id="currencyCombo" maxWidth="Infinity" styleClass="combo-box"/>
+                    </VBox>
+
+                    <Button fx:id="btnSaveProfile" text="Save Profile Changes" onAction="#handleSaveProfile" styleClass="btn-secondary" style="-fx-margin: 6 0 0 0;"/>
+                </VBox>
+            </VBox>
+
+            <!-- Change Password -->
+            <VBox spacing="14.0" styleClass="card" HBox.hgrow="ALWAYS">
+                <Label text="Change Password" styleClass="text-h3"/>
+                <Separator/>
+
+                <VBox spacing="10.0">
+                    <VBox spacing="4.0">
+                        <Label text="Current Password" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                        <PasswordField fx:id="currentPasswordField" styleClass="text-input"/>
+                    </VBox>
+
+                    <VBox spacing="4.0">
+                        <Label text="New Password" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                        <PasswordField fx:id="newPasswordField" styleClass="text-input"/>
+                    </VBox>
+
+                    <VBox spacing="4.0">
+                        <Label text="Confirm New Password" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                        <PasswordField fx:id="confirmPasswordField" styleClass="text-input"/>
+                    </VBox>
+
+                    <Button fx:id="btnChangePassword" text="Update Password" onAction="#handleChangePassword" styleClass="btn-secondary" style="-fx-margin: 6 0 0 0;"/>
+                </VBox>
+            </VBox>
+        </HBox>
+
+        <!-- Section 3: Custom Categories Manager -->
+        <VBox spacing="14.0" styleClass="card">
+            <Label text="Custom Categories Management" styleClass="text-h3"/>
+            <Label text="Create custom spending categories tailored to your personal lifestyle." styleClass="text-muted"/>
+            <Separator/>
+
+            <!-- Add Category Inline Form -->
+            <HBox spacing="12.0" alignment="CENTER_LEFT">
+                <TextField fx:id="newCatNameField" promptText="Category Name (e.g. Books, Gaming)" prefWidth="220.0" styleClass="text-input"/>
+                <ComboBox fx:id="newCatIconCombo" prefWidth="150.0" promptText="Vector Icon" styleClass="combo-box"/>
+                <ComboBox fx:id="newCatColorCombo" prefWidth="120.0" promptText="Color" styleClass="combo-box"/>
+                <Button fx:id="btnAddCategory" text="+ Add Category" onAction="#handleAddCategory" styleClass="btn-primary"/>
+            </HBox>
+
+            <TableView fx:id="categoriesTable" prefHeight="220.0">
+                <columns>
+                    <TableColumn fx:id="colCatName" text="Category" prefWidth="240.0"/>
+                    <TableColumn fx:id="colCatType" text="Type" prefWidth="120.0"/>
+                    <TableColumn fx:id="colCatAction" text="Action" prefWidth="120.0"/>
+                </columns>
+                <columnResizePolicy>
+                    <TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/>
+                </columnResizePolicy>
+            </TableView>
+        </VBox>
+
+        <!-- Section 4: Database Connection Configuration -->
+        <VBox spacing="14.0" styleClass="card">
+            <HBox alignment="CENTER_LEFT">
+                <VBox spacing="2.0">
+                    <Label text="MySQL Database Connectivity" styleClass="text-h3"/>
+                    <Label fx:id="dbStatusLabel" text="Current: MySQL 8.0" styleClass="text-muted"/>
+                </VBox>
+                <Region HBox.hgrow="ALWAYS"/>
+                <HBox spacing="10.0">
+                    <Button fx:id="btnTestDB" text="Test Connection" onAction="#handleTestDatabase" styleClass="btn-secondary"/>
+                    <Button fx:id="btnSaveDB" text="Save &amp; Reconnect" onAction="#handleSaveDatabase" styleClass="btn-primary"/>
+                </HBox>
+            </HBox>
+            <Separator/>
+
+            <GridPane hgap="14.0" vgap="10.0">
+                <columnConstraints>
+                    <ColumnConstraints percentWidth="30.0"/>
+                    <ColumnConstraints percentWidth="20.0"/>
+                    <ColumnConstraints percentWidth="25.0"/>
+                    <ColumnConstraints percentWidth="25.0"/>
+                </columnConstraints>
+
+                <VBox spacing="4.0" GridPane.columnIndex="0">
+                    <Label text="Host" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <TextField fx:id="dbHostField" styleClass="text-input"/>
+                </VBox>
+
+                <VBox spacing="4.0" GridPane.columnIndex="1">
+                    <Label text="Port" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <TextField fx:id="dbPortField" styleClass="text-input"/>
+                </VBox>
+
+                <VBox spacing="4.0" GridPane.columnIndex="2">
+                    <Label text="Database Name" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <TextField fx:id="dbNameField" styleClass="text-input"/>
+                </VBox>
+
+                <VBox spacing="4.0" GridPane.columnIndex="3">
+                    <Label text="Username" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <TextField fx:id="dbUserField" styleClass="text-input"/>
+                </VBox>
+
+                <VBox spacing="4.0" GridPane.columnIndex="0" GridPane.rowIndex="1">
+                    <Label text="Password" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                    <PasswordField fx:id="dbPasswordField" promptText="Enter MySQL Password" styleClass="text-input"/>
+                </VBox>
+            </GridPane>
+        </VBox>
+
+    </VBox>
+</ScrollPane>
+

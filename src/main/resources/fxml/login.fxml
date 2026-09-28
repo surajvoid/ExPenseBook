@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.shape.Circle?>
+
+<StackPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.expensebook.controller.LoginController"
+           styleClass="main-bg" prefWidth="1080.0" prefHeight="720.0">
+
+    <VBox alignment="CENTER" spacing="22.0" maxWidth="460.0" maxHeight="540.0" styleClass="card">
+        <VBox alignment="CENTER" spacing="8.0">
+            <StackPane prefWidth="64.0" prefHeight="64.0">
+                <Circle radius="32.0" fill="#E6F3EE"/>
+                <Label text="EB" style="-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #397A5E;"/>
+            </StackPane>
+            <Label text="Welcome Back" styleClass="text-h1"/>
+            <Label text="Sign in to your ExPense Book account" styleClass="text-muted"/>
+        </VBox>
+
+        <Label fx:id="errorLabel" text="Error message" textFill="#C94A4A" style="-fx-font-weight: bold; -fx-font-size: 12px;" visible="false"/>
+
+        <VBox spacing="14.0" prefWidth="380.0">
+            <VBox spacing="6.0">
+                <Label text="Email Address" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                <TextField fx:id="emailField" promptText="Enter your email" styleClass="text-input"/>
+            </VBox>
+
+            <VBox spacing="6.0">
+                <Label text="Password" style="-fx-font-weight: bold; -fx-text-fill: #26332F;"/>
+                <PasswordField fx:id="passwordField" promptText="Enter your password" styleClass="text-input"/>
+            </VBox>
+        </VBox>
+
+        <VBox spacing="12.0" alignment="CENTER" prefWidth="380.0" style="-fx-padding: 6 0 0 0;">
+            <Button fx:id="btnSignIn" text="Sign In" onAction="#handleSignIn" styleClass="btn-primary" maxWidth="Infinity" prefHeight="44.0"/>
+            <Button fx:id="btnRegister" text="Don't have an account? Get Started" onAction="#handleGoToRegister"
+                    style="-fx-background-color: transparent; -fx-text-fill: #5FA787; -fx-font-weight: bold; -fx-cursor: hand;"/>
+        </VBox>
+
+        <Separator prefWidth="380.0"/>
+
+        <!-- Quick Demo Accounts Helper -->
+        <HBox alignment="CENTER" spacing="10.0">
+            <Label text="Testing demo?" styleClass="text-muted"/>
+            <Button text="Fill Admin Credentials" onAction="#handleQuickDemoAdmin" styleClass="btn-secondary, btn-pill-small"/>
+        </HBox>
+    </VBox>
+
+</StackPane>
+
