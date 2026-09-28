@@ -144,9 +144,31 @@ public class DBConnection {
             // SQLite Fallback or SQLite explicit mode
             Class.forName("org.sqlite.JDBC");
             String sqlitePath = System.getenv("SQLITE_DB_PATH");
-            String sqliteUrl = (sqlitePath != null && !sqlitePath.trim().isEmpty())
-                    ? "jdbc:sqlite:" + sqlitePath.trim()
-                    : "jdbc:sqlite:expensebook.db";
+            if (sqlitePath == null || sqlitePath.trim().isEmpty()) {
+                File targetFile = new File("expensebook.db");
+                boolean canWrite = false;
+                try {
+                    File testFile = new File(".perm_check_" + System.currentTimeMillis());
+                    if (testFile.createNewFile()) {
+                        testFile.delete();
+                        canWrite = true;
+                    } else if (targetFile.exists() && targetFile.canWrite()) {
+                        canWrite = true;
+                    }
+                } catch (Exception ignored) {
+                    canWrite = false;
+                }
+
+                if (canWrite) {
+                    sqlitePath = targetFile.getAbsolutePath();
+                } else {
+                    String tmpDir = System.getProperty("java.io.tmpdir", "/tmp");
+                    File tmpDb = new File(tmpDir, "expensebook.db");
+                    sqlitePath = tmpDb.getAbsolutePath();
+                    System.out.println("⚠️ Working directory is read-only. Redirecting SQLite database to writable path: " + sqlitePath);
+                }
+            }
+            String sqliteUrl = "jdbc:sqlite:" + sqlitePath;
             connection = DriverManager.getConnection(sqliteUrl);
             isMySQL = false;
             System.out.println(" Connected to SQLite database [" + sqliteUrl + "].");

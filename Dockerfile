@@ -18,12 +18,15 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# Run as non-root user for production security
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-USER appuser
+# Run as non-root user with full permissions on /app
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
+    chown -R appuser:appgroup /app && \
+    chmod -R 775 /app
 
 # Copy shaded standalone jar from builder stage
 COPY --from=builder --chown=appuser:appgroup /build/target/expensebook-1.0.0.jar app.jar
+
+USER appuser
 
 # Environment defaults
 ENV PORT=8080
