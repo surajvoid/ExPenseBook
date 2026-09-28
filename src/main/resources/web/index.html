@@ -12,7 +12,7 @@
     <link rel="apple-touch-icon" href="/logo.png">
     <title>ExPense Book — Spend Smart • Live Better</title>
     <link rel="icon" type="image/png" href="/logo.png">
-    <link rel="stylesheet" href="/style.css?v=4">
+    <link rel="stylesheet" href="/style.css?v=5">
     <!-- Chart.js for beautiful interactive analytics and spending trend charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <!-- Fail-safe image constraints -->
@@ -52,7 +52,7 @@
                 <form onsubmit="handleLoginSubmit(event)">
                     <div class="form-group">
                         <label class="form-label" for="login-email">Email Address</label>
-                        <input type="email" id="login-email" class="form-input" placeholder="name@example.com" required autocomplete="email" inputmode="email">
+                        <input type="email" id="login-email" class="form-input"  required autocomplete="email" inputmode="email">
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="login-pass">Password</label>
@@ -67,7 +67,6 @@
                 </form>
 
                 <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); text-align: center;">
-                    <button type="button" class="btn btn-secondary btn-small" onclick="fillAdminCredentials()" style="width: 100%; padding: 10px; margin-bottom: 12px; font-weight: 600;">⚡ Fill Demo Admin Account</button>
                     <p style="font-size: 0.82rem; color: var(--text-muted);">
                         Don't have an account? <a href="javascript:void(0)" onclick="switchAuthView('register')" style="color: #0D382B; font-weight: 700; text-decoration: none;">Create Account</a>
                     </p>
@@ -83,7 +82,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="reg-email">Email Address</label>
-                        <input type="email" id="reg-email" class="form-input" placeholder="name@example.com" required autocomplete="email" inputmode="email">
+                        <input type="email" id="reg-email" class="form-input"  required autocomplete="email" inputmode="email">
                     </div>
                     <div class="form-group">
                         <label class="form-label" for="reg-pass">Password</label>
@@ -1264,6 +1263,6 @@
     </div> <!-- end app-container -->
 
     <!-- Application Script -->
-    <script src="/app.js?v=4"></script>
+    <script src="/app.js?v=5"></script>
 </body>
 </html>
