@@ -1,6 +1,8 @@
 package com.expensebook;
 
+import com.expensebook.model.User;
 import com.expensebook.util.DBConnection;
+import com.expensebook.util.SessionManager;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.fxml.FXMLLoader;
@@ -21,11 +23,18 @@ public class Main extends Application {
         primaryStage.setMinWidth(1080);
         primaryStage.setMinHeight(720);
 
-        // Pre-initialize database in background or synchronously
-        new Thread(DBConnection::getConnection).start();
+        // Pre-initialize database
+        try {
+            DBConnection.getConnection();
+        } catch (Exception ignored) {}
 
-        // Start with Onboarding
-        showOnboardingScreen();
+        // Auto-restore previous login session if available
+        User restoredUser = SessionManager.restorePersistedSession();
+        if (restoredUser != null) {
+            showMainApp();
+        } else {
+            showOnboardingScreen();
+        }
         primaryStage.show();
     }
 

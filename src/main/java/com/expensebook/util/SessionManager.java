@@ -1,8 +1,11 @@
 package com.expensebook.util;
 
+import com.expensebook.dao.UserDAO;
 import com.expensebook.model.FinancialMode;
 import com.expensebook.model.User;
 
+import java.io.File;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,9 +13,15 @@ public class SessionManager {
 
     private static User currentUser;
     private static final List<Runnable> sessionListeners = new ArrayList<>();
+    private static final String SESSION_FILE_NAME = ".expensebook_desktop_session";
+
+    private static File getSessionFile() {
+        return new File(System.getProperty("user.home"), SESSION_FILE_NAME);
+    }
 
     public static void setCurrentUser(User user) {
         currentUser = user;
+        persistSession(user);
         notifyListeners();
     }
 
@@ -46,6 +55,7 @@ public class SessionManager {
 
     public static void logout() {
         currentUser = null;
+        clearPersistedSession();
         notifyListeners();
     }
 
@@ -67,5 +77,50 @@ public class SessionManager {
                 e.printStackTrace();
             }
         }
+    }
+
+    private static void persistSession(User user) {
+        try {
+            File file = getSessionFile();
+            if (user != null) {
+                String token = SessionTokenUtil.generateToken(user);
+                if (token != null) {
+                    Files.writeString(file.toPath(), token);
+                }
+            } else {
+                clearPersistedSession();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void clearPersistedSession() {
+        try {
+            File file = getSessionFile();
+            if (file.exists()) {
+                file.delete();
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static User restorePersistedSession() {
+        try {
+            File file = getSessionFile();
+            if (file.exists() && file.canRead()) {
+                String token = Files.readString(file.toPath()).trim();
+                if (!token.isEmpty()) {
+                    UserDAO userDAO = new UserDAO();
+                    User restored = SessionTokenUtil.verifyToken(token, userDAO);
+                    if (restored != null && restored.isActive()) {
+                        currentUser = restored;
+                        return restored;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Notice: Could not restore desktop session: " + e.getMessage());
+        }
+        return null;
     }
 }

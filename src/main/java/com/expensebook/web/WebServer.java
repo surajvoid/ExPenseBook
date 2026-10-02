@@ -1,11 +1,13 @@
 package com.expensebook.web;
 
+import com.expensebook.dao.UserDAO;
 import com.expensebook.model.*;
 import com.expensebook.service.*;
 import com.expensebook.util.CurrencyUtil;
 import com.expensebook.util.DBConnection;
 import com.expensebook.util.DateUtil;
 import com.expensebook.util.SessionManager;
+import com.expensebook.util.SessionTokenUtil;
 import com.google.gson.*;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -42,6 +44,7 @@ public class WebServer {
             .create();
 
     private final UserService userService = new UserService();
+    private final UserDAO userDAO = new UserDAO();
     private final ExpenseService expenseService = new ExpenseService();
     private final CategoryService categoryService = new CategoryService();
     private final BudgetService budgetService = new BudgetService();
@@ -139,7 +142,8 @@ public class WebServer {
             FinancialMode mode = FinancialMode.fromString(modeStr);
 
             User user = userService.register(name, email, password, confirmPassword, mode);
-            String token = UUID.randomUUID().toString();
+            String token = SessionTokenUtil.generateToken(user);
+            if (token == null) token = UUID.randomUUID().toString();
             activeSessions.put(token, user);
             SessionManager.setCurrentUser(user);
 
@@ -164,7 +168,8 @@ public class WebServer {
             String password = json.get("password").getAsString();
 
             User user = userService.login(email, password);
-            String token = UUID.randomUUID().toString();
+            String token = SessionTokenUtil.generateToken(user);
+            if (token == null) token = UUID.randomUUID().toString();
             activeSessions.put(token, user);
             SessionManager.setCurrentUser(user);
 
@@ -192,6 +197,7 @@ public class WebServer {
     private void handleLogout(HttpExchange ex) throws IOException {
         String token = getToken(ex);
         if (token != null) activeSessions.remove(token);
+        SessionManager.logout();
         Map<String, Object> resp = new HashMap<>();
         resp.put("success", true);
         sendJsonResponse(ex, 200, resp);
@@ -906,8 +912,22 @@ public class WebServer {
 
     private User authenticate(HttpExchange ex) {
         String token = getToken(ex);
-        if (token != null && activeSessions.containsKey(token)) {
-            return activeSessions.get(token);
+        if (token != null && !token.isEmpty()) {
+            User cachedUser = activeSessions.get(token);
+            if (cachedUser != null) {
+                return cachedUser;
+            }
+            // Recover session after server restart / Render spin-down
+            try {
+                User verifiedUser = SessionTokenUtil.verifyToken(token, userDAO);
+                if (verifiedUser != null) {
+                    activeSessions.put(token, verifiedUser);
+                    SessionManager.setCurrentUser(verifiedUser);
+                    return verifiedUser;
+                }
+            } catch (Exception e) {
+                System.err.println("Session token recovery error: " + e.getMessage());
+            }
         }
         // Fallback to currently logged in session in SessionManager
         return SessionManager.getCurrentUser();

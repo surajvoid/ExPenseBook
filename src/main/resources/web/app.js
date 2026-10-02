@@ -2,6 +2,14 @@
 // Complete SPA Implementation supporting Mode A (Track Only) & Mode B (Track + Budget)
 
 let currentUser = null;
+try {
+    const savedUser = localStorage.getItem('eb_user');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+    }
+} catch (e) {
+    currentUser = null;
+}
 let currentToken = localStorage.getItem('eb_token') || null;
 let currentView = 'dashboard';
 let currentCalMonth = new Date().getMonth() + 1;
@@ -127,12 +135,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function initApp() {
     const splash = document.getElementById('app-splash-loader');
+
+    // Case 1: Active persistent session with cached profile — instant zero-delay render!
+    if (currentToken && currentUser) {
+        document.documentElement.classList.add('user-logged-in');
+        showAppUI();
+        if (splash) {
+            splash.style.opacity = '0';
+            setTimeout(() => { splash.style.display = 'none'; }, 300);
+        }
+
+        // Validate and refresh session profile in background (Render spin-up resilient)
+        try {
+            const resp = await apiFetch('/api/auth/current');
+            if (resp && resp.user) {
+                currentUser = resp.user;
+                localStorage.setItem('eb_user', JSON.stringify(currentUser));
+                updateUserHeaderAndSidebar();
+            }
+        } catch (e) {
+            // Note: Explicit 401 is handled automatically inside apiFetch.
+            // Temporary network/spin-up errors will NOT wipe the active session.
+            console.log('Background session verification notice:', e.message);
+        }
+        return;
+    }
+
+    // Case 2: We have a token but need to retrieve user profile
     if (currentToken) {
         document.documentElement.classList.add('user-logged-in');
         try {
             const resp = await apiFetch('/api/auth/current');
             if (resp && resp.user) {
                 currentUser = resp.user;
+                localStorage.setItem('eb_user', JSON.stringify(currentUser));
                 if (splash) {
                     splash.style.opacity = '0';
                     setTimeout(() => { splash.style.display = 'none'; }, 300);
@@ -141,13 +177,18 @@ async function initApp() {
                 return;
             }
         } catch (e) {
-            console.warn('Session expired or invalid:', e);
-            localStorage.removeItem('eb_token');
-            currentToken = null;
-            currentUser = null;
-            document.documentElement.classList.remove('user-logged-in');
+            console.warn('Initial session check note:', e.message);
+            if (e.message && (e.message.includes('401') || e.message.includes('Session expired') || e.message.includes('Not logged in'))) {
+                localStorage.removeItem('eb_token');
+                localStorage.removeItem('eb_user');
+                currentToken = null;
+                currentUser = null;
+                document.documentElement.classList.remove('user-logged-in');
+            }
         }
     }
+
+    // Case 3: No active session
     document.documentElement.classList.remove('user-logged-in');
     if (splash) {
         splash.style.opacity = '0';
@@ -172,8 +213,10 @@ async function apiFetch(endpoint, options = {}) {
     if (res.status === 401) {
         // Unauthorized
         localStorage.removeItem('eb_token');
+        localStorage.removeItem('eb_user');
         currentToken = null;
         currentUser = null;
+        document.documentElement.classList.remove('user-logged-in');
         showAuthUI();
         throw new Error('Session expired. Please sign in.');
     }
@@ -352,6 +395,7 @@ async function handleLoginSubmit(e) {
             currentToken = resp.token;
             currentUser = resp.user;
             localStorage.setItem('eb_token', currentToken);
+            localStorage.setItem('eb_user', JSON.stringify(currentUser));
             document.documentElement.classList.add('user-logged-in');
             showToast(`Welcome back, ${currentUser.fullName || 'User'}!`, 'success');
             showAppUI();
@@ -419,6 +463,7 @@ async function finalizePersonalization() {
             currentToken = resp.token;
             currentUser = resp.user;
             localStorage.setItem('eb_token', currentToken);
+            localStorage.setItem('eb_user', JSON.stringify(currentUser));
             document.documentElement.classList.add('user-logged-in');
             showToast('Account created successfully! Welcome to ExPense Book.', 'success');
             showAppUI();
@@ -447,8 +492,10 @@ async function handleLogout() {
         await apiFetch('/api/auth/logout', { method: 'POST' });
     } catch (ignored) { }
     localStorage.removeItem('eb_token');
+    localStorage.removeItem('eb_user');
     currentToken = null;
     currentUser = null;
+    document.documentElement.classList.remove('user-logged-in');
     const fab = document.getElementById('ai-floating-fab');
     if (fab) fab.style.display = 'none';
     const drawer = document.getElementById('ai-floating-drawer');
@@ -1753,6 +1800,7 @@ async function setSettingMode(newMode) {
         });
         if (resp && resp.user) {
             currentUser = resp.user;
+            localStorage.setItem('eb_user', JSON.stringify(currentUser));
             updateUserHeaderAndSidebar();
             loadSettingsView();
             alert(`Financial mode updated to ${newMode === 'TRACK_ONLY' ? 'Track Only' : 'Track + Monthly Budget'}!`);
@@ -1774,6 +1822,7 @@ async function handleUpdateProfile(e) {
         });
         if (resp && resp.user) {
             currentUser = resp.user;
+            localStorage.setItem('eb_user', JSON.stringify(currentUser));
             updateUserHeaderAndSidebar();
             alert('Profile updated successfully!');
         }
