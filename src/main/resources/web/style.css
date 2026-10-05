@@ -56,12 +56,22 @@
     -webkit-tap-highlight-color: transparent;
 }
 
+html {
+    overflow-x: hidden;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
+}
+
 body {
     background-color: var(--bg-ivory);
     color: var(--text-charcoal);
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     overflow-x: hidden;
+    width: 100%;
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Typography */
@@ -255,8 +265,9 @@ h1, h2, h3, h4 {
 /* Layout: Sidebar & Content Area */
 #app-container {
     display: flex;
-    width: 100vw;
+    width: 100%;
     min-height: 100vh;
+    min-height: 100dvh;
 }
 
 .sidebar {
@@ -421,8 +432,11 @@ h1, h2, h3, h4 {
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow-y: auto;
     background-color: var(--bg-ivory);
+    touch-action: pan-y pinch-zoom;
+    -webkit-overflow-scrolling: touch;
 }
 
 .top-navbar {
@@ -574,6 +588,34 @@ h1, h2, h3, h4 {
 }
 
 @media (max-width: 900px) {
+    html {
+        overflow-y: auto;
+        overflow-x: hidden;
+        touch-action: pan-y pinch-zoom;
+        -webkit-overflow-scrolling: touch;
+    }
+    body {
+        overflow-y: visible;
+        overflow-x: hidden;
+        touch-action: pan-y pinch-zoom;
+        -webkit-overflow-scrolling: touch;
+        min-height: 100dvh;
+        width: 100%;
+    }
+    #app-container {
+        min-height: 100dvh;
+        width: 100%;
+        overflow: visible;
+    }
+    .main-content {
+        overflow-y: visible !important;
+        overflow-x: hidden !important;
+        min-height: auto !important;
+        height: auto !important;
+        touch-action: pan-y pinch-zoom !important;
+        overscroll-behavior-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
     .sidebar {
         position: fixed;
         left: -260px;
@@ -1308,10 +1350,22 @@ h1, h2, h3, h4 {
 }
 
 @media (max-width: 768px) {
-    /* Prevent any horizontal page overflow on small phones */
-    html, body {
+    /* Smooth 1-finger scrolling without horizontal overflow on mobile phones */
+    html {
         overflow-x: hidden;
-        width: 100vw;
+        overflow-y: auto;
+        touch-action: pan-y pinch-zoom;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+    }
+
+    body {
+        overflow-x: hidden;
+        overflow-y: visible;
+        width: 100%;
+        max-width: 100%;
+        touch-action: pan-y pinch-zoom;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* Off-Canvas Sidebar */
@@ -1369,6 +1423,13 @@ h1, h2, h3, h4 {
         margin-left: 0 !important;
         width: 100% !important;
         min-width: 100% !important;
+        height: auto !important;
+        min-height: auto !important;
+        overflow-y: visible !important;
+        overflow-x: hidden !important;
+        touch-action: pan-y pinch-zoom !important;
+        overscroll-behavior-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
         padding-bottom: calc(75px + env(safe-area-inset-bottom)) !important;
     }
 
@@ -2013,18 +2074,28 @@ html.user-logged-in #app-container {
     display: flex !important;
 }
 
-/* Native Mobile App Touch & Momentum Scroll Polish */
+/* Native Mobile App Touch & 1-Finger Momentum Scroll Polish */
 html, body {
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: none;
+    touch-action: pan-y pinch-zoom;
+    overscroll-behavior-y: auto;
 }
 
-.main-content, .modal-content, .nav-links {
+.main-content, .content-body, .view-panel, .card {
+    touch-action: pan-y pinch-zoom;
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
 }
 
-button, .btn, .nav-item, .mobile-nav-item, .auth-tab-btn, .card {
+canvas {
+    touch-action: pan-y !important;
+}
+
+.modal-content, .nav-links {
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+}
+
+button, .btn, .nav-item, .mobile-nav-item, .auth-tab-btn {
     -webkit-tap-highlight-color: transparent;
     user-select: none;
     -webkit-user-select: none;

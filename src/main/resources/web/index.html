@@ -12,7 +12,7 @@
     <link rel="apple-touch-icon" href="/logo.png">
     <title>ExPense Book — Spend Smart • Live Better</title>
     <link rel="icon" type="image/png" href="/logo.png">
-    <link rel="stylesheet" href="/style.css?v=9">
+    <link rel="stylesheet" href="/style.css?v=10">
     <!-- Chart.js for beautiful interactive analytics and spending trend charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
@@ -343,8 +343,8 @@
                                 </div>
                                 <span class="badge badge-sage">This Month</span>
                             </div>
-                            <div style="position: relative; height: 260px; width: 100%;">
-                                <canvas id="dashTrendChart"></canvas>
+                            <div style="position: relative; height: 260px; width: 100%; touch-action: pan-y;">
+                                <canvas id="dashTrendChart" style="touch-action: pan-y !important;"></canvas>
                             </div>
                         </div>
                     </div>
@@ -493,14 +493,14 @@
                     <div class="grid-2" style="margin-bottom: 18px;">
                         <div class="card">
                             <h3>Category Breakdown</h3>
-                            <div style="position: relative; height: 250px; width: 100%; margin-top: 14px;">
-                                <canvas id="analyticsCategoryChart"></canvas>
+                            <div style="position: relative; height: 250px; width: 100%; margin-top: 14px; touch-action: pan-y;">
+                                <canvas id="analyticsCategoryChart" style="touch-action: pan-y !important;"></canvas>
                             </div>
                         </div>
                         <div class="card">
                             <h3>Payment Method Distribution</h3>
-                            <div style="position: relative; height: 250px; width: 100%; margin-top: 14px;">
-                                <canvas id="analyticsPaymentChart"></canvas>
+                            <div style="position: relative; height: 250px; width: 100%; margin-top: 14px; touch-action: pan-y;">
+                                <canvas id="analyticsPaymentChart" style="touch-action: pan-y !important;"></canvas>
                             </div>
                         </div>
                     </div>
@@ -529,8 +529,8 @@
                     <!-- Yearly Analysis Chart -->
                     <div class="card">
                         <h3>12-Month Yearly Spending Overview</h3>
-                        <div style="position: relative; height: 260px; width: 100%; margin-top: 14px;">
-                            <canvas id="analyticsYearlyChart"></canvas>
+                        <div style="position: relative; height: 260px; width: 100%; margin-top: 14px; touch-action: pan-y;">
+                            <canvas id="analyticsYearlyChart" style="touch-action: pan-y !important;"></canvas>
                         </div>
                     </div>
                 </div>
@@ -1286,6 +1286,6 @@
     </div> <!-- end app-container -->
 
     <!-- Application Script -->
-    <script src="/app.js?v=9"></script>
+    <script src="/app.js?v=10"></script>
 </body>
 </html>
