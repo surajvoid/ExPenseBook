@@ -98,7 +98,7 @@ public class BudgetDAO {
     public List<CategoryBudget> getCategoryBudgets(int budgetId) throws SQLException {
         List<CategoryBudget> list = new ArrayList<>();
         String sql = "SELECT cb.*, c.name as cat_name, c.icon_name as cat_icon, c.color as cat_color " +
-                "FROM category_budgets cb JOIN categories c ON cb.category_id = c.id " +
+                "FROM category_budgets cb LEFT JOIN categories c ON cb.category_id = c.id " +
                 "WHERE cb.budget_id = ?";
 
         Connection conn = DBConnection.getConnection();
@@ -111,9 +111,9 @@ public class BudgetDAO {
                     cb.setBudgetId(rs.getInt("budget_id"));
                     cb.setCategoryId(rs.getInt("category_id"));
                     cb.setAmount(rs.getDouble("amount"));
-                    cb.setCategoryName(rs.getString("cat_name"));
-                    cb.setCategoryIcon(rs.getString("cat_icon"));
-                    cb.setCategoryColor(rs.getString("cat_color"));
+                    cb.setCategoryName(rs.getString("cat_name") != null ? rs.getString("cat_name") : "Other");
+                    cb.setCategoryIcon(rs.getString("cat_icon") != null ? rs.getString("cat_icon") : "OTHERS");
+                    cb.setCategoryColor(rs.getString("cat_color") != null ? rs.getString("cat_color") : "#64748B");
                     list.add(cb);
                 }
             }

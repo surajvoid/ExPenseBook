@@ -70,7 +70,7 @@ public class RecurringExpenseDAO {
 
     public List<RecurringExpense> getRecurringForUser(int userId) throws SQLException {
         String sql = "SELECT r.*, c.name as cat_name, c.icon_name as cat_icon, c.color as cat_color " +
-                "FROM recurring_expenses r JOIN categories c ON r.category_id = c.id " +
+                "FROM recurring_expenses r LEFT JOIN categories c ON r.category_id = c.id " +
                 "WHERE r.user_id = ? ORDER BY r.next_due_date ASC";
 
         List<RecurringExpense> list = new ArrayList<>();
@@ -90,9 +90,9 @@ public class RecurringExpenseDAO {
                     re.setNextDueDate(rs.getDate("next_due_date").toLocalDate());
                     re.setActive(rs.getInt("is_active") == 1);
                     re.setCreatedAt(rs.getTimestamp("created_at"));
-                    re.setCategoryName(rs.getString("cat_name"));
-                    re.setCategoryIcon(rs.getString("cat_icon"));
-                    re.setCategoryColor(rs.getString("cat_color"));
+                    re.setCategoryName(rs.getString("cat_name") != null ? rs.getString("cat_name") : "Other");
+                    re.setCategoryIcon(rs.getString("cat_icon") != null ? rs.getString("cat_icon") : "OTHERS");
+                    re.setCategoryColor(rs.getString("cat_color") != null ? rs.getString("cat_color") : "#64748B");
                     list.add(re);
                 }
             }

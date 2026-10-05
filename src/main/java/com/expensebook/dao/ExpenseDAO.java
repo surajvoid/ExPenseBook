@@ -69,7 +69,7 @@ public class ExpenseDAO {
 
     public Expense getExpenseById(int id) throws SQLException {
         String sql = "SELECT e.*, c.name AS cat_name, c.icon_name AS cat_icon, c.color AS cat_color " +
-                "FROM expenses e JOIN categories c ON e.category_id = c.id WHERE e.id = ?";
+                "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id WHERE e.id = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -86,7 +86,7 @@ public class ExpenseDAO {
                                      Integer categoryId, String paymentMode, String search, String sortBy) throws SQLException {
         StringBuilder sql = new StringBuilder(
                 "SELECT e.*, c.name AS cat_name, c.icon_name AS cat_icon, c.color AS cat_color " +
-                        "FROM expenses e JOIN categories c ON e.category_id = c.id " +
+                        "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id " +
                         "WHERE e.user_id = ? "
         );
 
@@ -177,7 +177,7 @@ public class ExpenseDAO {
 
     public Map<Category, Double> getCategoryWiseSpending(int userId, LocalDate startDate, LocalDate endDate) throws SQLException {
         String sql = "SELECT c.id, c.name, c.icon_name, c.color, c.is_default, COALESCE(SUM(e.amount), 0) AS total " +
-                "FROM expenses e JOIN categories c ON e.category_id = c.id " +
+                "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id " +
                 "WHERE e.user_id = ? AND e.expense_date >= ? AND e.expense_date <= ? " +
                 "GROUP BY c.id, c.name, c.icon_name, c.color, c.is_default " +
                 "ORDER BY total DESC";
@@ -192,9 +192,12 @@ public class ExpenseDAO {
                 while (rs.next()) {
                     Category c = new Category();
                     c.setId(rs.getInt("id"));
-                    c.setName(rs.getString("name"));
-                    c.setIconName(rs.getString("icon_name"));
-                    c.setColor(rs.getString("color"));
+                    String name = rs.getString("name");
+                    c.setName(name != null ? name : "Other");
+                    String icon = rs.getString("icon_name");
+                    c.setIconName(icon != null ? icon : "OTHERS");
+                    String color = rs.getString("color");
+                    c.setColor(color != null ? color : "#64748B");
                     c.setDefault(rs.getInt("is_default") == 1);
                     map.put(c, rs.getDouble("total"));
                 }
@@ -286,7 +289,7 @@ public class ExpenseDAO {
 
     public List<Expense> getExpensesForDate(int userId, LocalDate date) throws SQLException {
         String sql = "SELECT e.*, c.name AS cat_name, c.icon_name AS cat_icon, c.color AS cat_color " +
-                "FROM expenses e JOIN categories c ON e.category_id = c.id " +
+                "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id " +
                 "WHERE e.user_id = ? AND e.expense_date = ? " +
                 "ORDER BY e.id DESC";
 
@@ -321,7 +324,7 @@ public class ExpenseDAO {
 
     public List<Expense> getRecentExpenses(int userId, int limit) throws SQLException {
         String sql = "SELECT e.*, c.name AS cat_name, c.icon_name AS cat_icon, c.color AS cat_color " +
-                "FROM expenses e JOIN categories c ON e.category_id = c.id " +
+                "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id " +
                 "WHERE e.user_id = ? ORDER BY e.expense_date DESC, e.id DESC LIMIT ?";
 
         List<Expense> list = new ArrayList<>();
@@ -352,13 +355,11 @@ public class ExpenseDAO {
             String catName = rs.getString("cat_name");
             String catIcon = rs.getString("cat_icon");
             String catColor = rs.getString("cat_color");
-            e.setCategoryName(catName);
-            e.setCategoryIcon(catIcon);
-            e.setCategoryColor(catColor);
-            if (catName != null) {
-                Category cat = new Category(e.getCategoryId(), catName, catIcon, catColor, true);
-                e.setCategory(cat);
-            }
+            e.setCategoryName(catName != null ? catName : "Other");
+            e.setCategoryIcon(catIcon != null ? catIcon : "OTHERS");
+            e.setCategoryColor(catColor != null ? catColor : "#64748B");
+            Category cat = new Category(e.getCategoryId(), catName != null ? catName : "Other", catIcon != null ? catIcon : "OTHERS", catColor != null ? catColor : "#64748B", true);
+            e.setCategory(cat);
         } catch (SQLException ignored) {
         }
         return e;

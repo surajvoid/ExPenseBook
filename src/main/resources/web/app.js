@@ -70,6 +70,133 @@ function getCategoryMeta(name) {
     return { bg: '#E8F5EF', bar: '#0D382B', text: '#0D382B' };
 }
 
+// --- Client-Side Resilient Storage & Auto-Sync Engine ---
+function getActiveUserEmail() {
+    if (currentUser && currentUser.email) return currentUser.email.toLowerCase().trim();
+    const saved = localStorage.getItem('eb_last_email');
+    return saved ? saved.toLowerCase().trim() : 'default_user';
+}
+
+function getLocalExpenses(email = null) {
+    try {
+        const key = 'eb_expenses_' + (email ? email.toLowerCase().trim() : getActiveUserEmail());
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveLocalExpenses(list, email = null) {
+    try {
+        const key = 'eb_expenses_' + (email ? email.toLowerCase().trim() : getActiveUserEmail());
+        localStorage.setItem(key, JSON.stringify(list || []));
+    } catch (e) {
+        console.warn('Failed to save local expenses:', e);
+    }
+}
+
+function addLocalExpense(item) {
+    const list = getLocalExpenses();
+    const exists = list.some(x => (item.id && x.id === item.id) || (item.tempId && x.tempId === item.tempId));
+    if (!exists) {
+        list.unshift(item);
+        saveLocalExpenses(list);
+    }
+}
+
+function updateLocalExpense(item) {
+    let list = getLocalExpenses();
+    list = list.map(x => {
+        if ((item.id && x.id === item.id) || (item.tempId && x.tempId === item.tempId)) {
+            return { ...x, ...item };
+        }
+        return x;
+    });
+    saveLocalExpenses(list);
+}
+
+function deleteLocalExpense(id) {
+    let list = getLocalExpenses();
+    list = list.filter(x => x.id !== id && x.tempId !== id);
+    saveLocalExpenses(list);
+}
+
+let isSyncingExpenses = false;
+async function syncExpensesWithServer() {
+    if (isSyncingExpenses || !currentToken || !currentUser) return;
+    isSyncingExpenses = true;
+    try {
+        const email = getActiveUserEmail();
+        let localList = getLocalExpenses(email);
+
+        const serverData = await apiFetch('/api/expenses?sortBy=DATE_DESC');
+        const serverExpenses = (serverData && serverData.expenses) ? serverData.expenses : [];
+
+        if (serverExpenses.length === 0 && localList.length > 0) {
+            // Container was reset by host: auto-restore all local entries to server!
+            console.log(`Auto-restoring ${localList.length} local entries to server database...`);
+            let restoredCount = 0;
+            for (const item of localList) {
+                try {
+                    const payload = {
+                        amount: item.amount,
+                        categoryId: item.categoryId || (item.category ? item.category.id : 1),
+                        paymentMode: item.paymentMode || 'UPI',
+                        expenseDate: item.expenseDate,
+                        description: item.description || ''
+                    };
+                    const created = await apiFetch('/api/expenses', {
+                        method: 'POST',
+                        body: payload
+                    });
+                    if (created && created.id) {
+                        item.id = created.id;
+                        restoredCount++;
+                    }
+                } catch (err) {
+                    console.warn('Failed restoring entry to server:', err);
+                }
+            }
+            saveLocalExpenses(localList, email);
+            if (restoredCount > 0) {
+                showToast(`✅ Synced and restored ${restoredCount} entries to your account!`, 'success');
+            }
+        } else if (serverExpenses.length > 0) {
+            // Merge: if any local items were added offline, upload them now
+            const serverIds = new Set(serverExpenses.map(s => s.id));
+            const pendingUploads = localList.filter(l => !l.id || !serverIds.has(l.id));
+
+            for (const pending of pendingUploads) {
+                try {
+                    const payload = {
+                        amount: pending.amount,
+                        categoryId: pending.categoryId || (pending.category ? pending.category.id : 1),
+                        paymentMode: pending.paymentMode || 'UPI',
+                        expenseDate: pending.expenseDate,
+                        description: pending.description || ''
+                    };
+                    const created = await apiFetch('/api/expenses', {
+                        method: 'POST',
+                        body: payload
+                    });
+                    if (created && created.id) {
+                        pending.id = created.id;
+                        serverExpenses.unshift(created);
+                    }
+                } catch (err) {
+                    console.warn('Failed uploading pending entry:', err);
+                }
+            }
+            saveLocalExpenses(serverExpenses, email);
+        }
+    } catch (err) {
+        console.log('Background sync note (operating with offline storage):', err.message);
+    } finally {
+        isSyncingExpenses = false;
+    }
+}
+
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
@@ -211,7 +338,71 @@ async function apiFetch(endpoint, options = {}) {
 
     const res = await fetch(endpoint, options);
     if (res.status === 401) {
-        // Unauthorized
+        // Unauthorized: Check if server container was reset and auto-recover user
+        const email = getActiveUserEmail();
+        const savedAccountRaw = localStorage.getItem('eb_account_' + email);
+        if (savedAccountRaw && !window._isAutoRecoveringAuth && !endpoint.includes('/api/auth/')) {
+            window._isAutoRecoveringAuth = true;
+            try {
+                const acc = JSON.parse(savedAccountRaw);
+                console.log('Session expired or container reset. Auto-recovering session for', acc.email);
+                let recoveryToken = null;
+                // Attempt login first
+                const logResp = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: acc.email, password: acc.password })
+                });
+                if (logResp.ok) {
+                    const data = await logResp.json();
+                    if (data && data.token) {
+                        recoveryToken = data.token;
+                        currentUser = data.user;
+                    }
+                } else {
+                    // Container reset: re-register account
+                    const regResp = await fetch('/api/auth/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            fullName: acc.fullName || 'User',
+                            email: acc.email,
+                            password: acc.password,
+                            confirmPassword: acc.password,
+                            mode: acc.mode || 'TRACK_ONLY'
+                        })
+                    });
+                    if (regResp.ok) {
+                        const data = await regResp.json();
+                        if (data && data.token) {
+                            recoveryToken = data.token;
+                            currentUser = data.user;
+                        }
+                    }
+                }
+
+                if (recoveryToken) {
+                    currentToken = recoveryToken;
+                    localStorage.setItem('eb_token', currentToken);
+                    localStorage.setItem('eb_user', JSON.stringify(currentUser));
+                    window._isAutoRecoveringAuth = false;
+                    // Retry original call with new token
+                    options.headers = options.headers || {};
+                    options.headers['Authorization'] = `Bearer ${currentToken}`;
+                    const retryRes = await fetch(endpoint, options);
+                    if (retryRes.ok) {
+                        const ct = retryRes.headers.get('content-type');
+                        if (ct && ct.includes('application/json')) return await retryRes.json();
+                        return retryRes;
+                    }
+                }
+            } catch (recErr) {
+                console.warn('Auto-recovery in apiFetch error:', recErr);
+            }
+            window._isAutoRecoveringAuth = false;
+        }
+
+        // Unauthorized and cannot recover
         localStorage.removeItem('eb_token');
         localStorage.removeItem('eb_user');
         currentToken = null;
@@ -386,6 +577,13 @@ async function handleLoginSubmit(e) {
         btn.textContent = 'Signing In...';
     }
 
+    const normEmail = email.toLowerCase().trim();
+    const savedAccountRaw = localStorage.getItem('eb_account_' + normEmail);
+    let savedAccount = null;
+    if (savedAccountRaw) {
+        try { savedAccount = JSON.parse(savedAccountRaw); } catch (ignored) {}
+    }
+
     try {
         const resp = await apiFetch('/api/auth/login', {
             method: 'POST',
@@ -396,11 +594,51 @@ async function handleLoginSubmit(e) {
             currentUser = resp.user;
             localStorage.setItem('eb_token', currentToken);
             localStorage.setItem('eb_user', JSON.stringify(currentUser));
+            localStorage.setItem('eb_account_' + normEmail, JSON.stringify({
+                fullName: currentUser.fullName || (savedAccount ? savedAccount.fullName : 'User'),
+                email: normEmail,
+                password: password,
+                mode: currentUser.financialMode || (savedAccount ? savedAccount.mode : 'TRACK_ONLY')
+            }));
+            localStorage.setItem('eb_last_email', normEmail);
             document.documentElement.classList.add('user-logged-in');
             showToast(`Welcome back, ${currentUser.fullName || 'User'}!`, 'success');
             showAppUI();
+            syncExpensesWithServer();
+            return;
         }
     } catch (err) {
+        // If server container reset and wiped the SQLite db, auto-recreate account seamlessly
+        if (savedAccount && savedAccount.password === password) {
+            console.log('Server container reset detected. Auto-restoring registered account:', normEmail);
+            try {
+                const regResp = await apiFetch('/api/auth/register', {
+                    method: 'POST',
+                    body: {
+                        fullName: savedAccount.fullName || 'User',
+                        email: normEmail,
+                        password: password,
+                        confirmPassword: password,
+                        mode: savedAccount.mode || 'TRACK_ONLY'
+                    }
+                });
+                if (regResp && regResp.token) {
+                    currentToken = regResp.token;
+                    currentUser = regResp.user;
+                    localStorage.setItem('eb_token', currentToken);
+                    localStorage.setItem('eb_user', JSON.stringify(currentUser));
+                    localStorage.setItem('eb_last_email', normEmail);
+                    document.documentElement.classList.add('user-logged-in');
+                    showToast(`Welcome back, ${currentUser.fullName || 'User'}!`, 'success');
+                    showAppUI();
+                    syncExpensesWithServer();
+                    return;
+                }
+            } catch (regErr) {
+                console.warn('Auto re-registration attempt failed:', regErr);
+            }
+        }
+
         if (errBox) {
             errBox.textContent = err.message || 'Invalid email or password.';
             errBox.style.display = 'flex';
@@ -464,9 +702,18 @@ async function finalizePersonalization() {
             currentUser = resp.user;
             localStorage.setItem('eb_token', currentToken);
             localStorage.setItem('eb_user', JSON.stringify(currentUser));
+            const normEmail = pendingRegisterData.email.toLowerCase().trim();
+            localStorage.setItem('eb_account_' + normEmail, JSON.stringify({
+                fullName: pendingRegisterData.fullName,
+                email: normEmail,
+                password: pendingRegisterData.password,
+                mode: mode
+            }));
+            localStorage.setItem('eb_last_email', normEmail);
             document.documentElement.classList.add('user-logged-in');
             showToast('Account created successfully! Welcome to ExPense Book.', 'success');
             showAppUI();
+            syncExpensesWithServer();
         }
     } catch (err) {
         if (errBox) {
@@ -632,174 +879,316 @@ function toggleMobileSidebar() {
 }
 
 // --- Dashboard View ---
+function renderDashboardFromLocal(localList) {
+    if (!localList || localList.length === 0) return;
+    const curr = (currentUser && currentUser.currency) || '₹';
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth() + 1;
+    const todayStr = getTodayLocalDate();
+
+    const curMonthExpenses = localList.filter(e => {
+        if (!e.expenseDate) return false;
+        const parts = e.expenseDate.split('-');
+        if (parts.length < 2) return false;
+        return parseInt(parts[0]) === curYear && parseInt(parts[1]) === curMonth;
+    });
+
+    const totalSpent = curMonthExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const todaySpent = localList
+        .filter(e => e.expenseDate === todayStr)
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const dayOfMonth = now.getDate();
+    const dailyAvg = dayOfMonth > 0 ? (totalSpent / dayOfMonth) : 0;
+    const daysInMonth = new Date(curYear, curMonth, 0).getDate();
+    const daysLeft = Math.max(0, daysInMonth - dayOfMonth);
+
+    const totalSpentEl = document.getElementById('dash-total-spent');
+    if (totalSpentEl) totalSpentEl.textContent = `${curr}${Math.round(totalSpent).toLocaleString()}`;
+
+    const todaySpentEl = document.getElementById('dash-today-spent');
+    if (todaySpentEl) todaySpentEl.textContent = `${curr}${Math.round(todaySpent).toLocaleString()}`;
+
+    const dailyAvgEl = document.getElementById('dash-daily-avg');
+    if (dailyAvgEl) dailyAvgEl.textContent = `${curr}${Math.round(dailyAvg).toLocaleString()}`;
+
+    const daysLeftEl = document.getElementById('dash-days-left');
+    if (daysLeftEl) daysLeftEl.textContent = daysLeft;
+
+    const daysFill = document.getElementById('dash-days-left-fill');
+    if (daysFill) {
+        const pct = Math.min(100, Math.round((dayOfMonth / daysInMonth) * 100));
+        daysFill.style.width = `${pct}%`;
+    }
+
+    // Category breakdown
+    const catMap = {};
+    curMonthExpenses.forEach(e => {
+        const catName = e.categoryName || (e.category ? e.category.name : 'Other');
+        catMap[catName] = (catMap[catName] || 0) + (parseFloat(e.amount) || 0);
+    });
+
+    const catContainer = document.getElementById('dash-categories-container');
+    if (catContainer && Object.keys(catMap).length > 0) {
+        catContainer.className = 'dash-cat-grid';
+        catContainer.innerHTML = '';
+        Object.entries(catMap).forEach(([name, amt]) => {
+            const meta = getCategoryMeta(name);
+            const pct = totalSpent > 0 ? (amt / totalSpent) * 100 : 0;
+            const card = document.createElement('div');
+            card.className = 'dash-cat-card';
+            card.onclick = () => {
+                navigate('transactions');
+            };
+            card.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: ${meta.bar}; display: inline-block;"></span>
+                    <div class="dash-cat-name">${escapeHtml(name)}</div>
+                </div>
+                <div class="dash-cat-amount">${curr}${Math.round(amt).toLocaleString()}</div>
+                <div class="dash-cat-bar-wrap">
+                    <div class="dash-cat-bar">
+                        <div class="dash-cat-bar-fill" style="width: ${Math.min(100, Math.round(pct))}%; background: ${meta.bar};"></div>
+                    </div>
+                    <span class="dash-cat-pct">${Math.round(pct)}%</span>
+                </div>
+            `;
+            catContainer.appendChild(card);
+        });
+    }
+
+    // Recent items
+    const recentList = document.getElementById('dash-recent-list');
+    if (recentList && localList.length > 0) {
+        recentList.innerHTML = '';
+        const recents = localList.slice(0, 5);
+        recents.forEach(t => {
+            const catName = t.categoryName || (t.category ? t.category.name : 'Other');
+            const meta = getCategoryMeta(catName);
+            const item = document.createElement('div');
+            item.className = 'card';
+            item.style.padding = '12px 16px';
+            item.style.display = 'flex';
+            item.style.justifyContent = 'space-between';
+            item.style.alignItems = 'center';
+            item.innerHTML = `
+                <div>
+                    <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-charcoal);">${escapeHtml(t.description || catName)}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">${t.expenseDate} • <span class="badge" style="background: ${meta.bg}; color: ${meta.text}; font-size: 0.68rem; padding: 2px 7px;">${catName}</span> • <span class="badge badge-sage" style="font-size: 0.68rem; padding: 2px 7px;">${t.paymentMode || 'UPI'}</span></div>
+                </div>
+                <div style="font-weight: 800; font-size: 1.05rem; color: #1A2E26;">
+                    -${curr}${Number(t.amount || 0).toLocaleString()}
+                </div>
+            `;
+            recentList.appendChild(item);
+        });
+    }
+
+    // Daily spending trend chart
+    const dailySpending = {};
+    curMonthExpenses.forEach(e => {
+        if (e.expenseDate) {
+            const parts = e.expenseDate.split('-');
+            if (parts.length >= 3) {
+                const dayNum = parseInt(parts[2]);
+                dailySpending[dayNum] = (dailySpending[dayNum] || 0) + (parseFloat(e.amount) || 0);
+            }
+        }
+    });
+    renderDashTrendChart(dailySpending);
+}
+
+function renderServerDashboard(data) {
+    const curr = data.currency || '₹';
+
+    // Period Title
+    if (data.monthYearTitle) {
+        document.getElementById('top-period').textContent = data.monthYearTitle;
+    }
+
+    // Mode B Budget Card
+    const budgetCard = document.getElementById('dashboard-budget-card');
+    if (data.isBudgetMode && data.budgetSummary) {
+        if (budgetCard) budgetCard.style.display = 'block';
+        const b = data.budgetSummary;
+        const totalBudget = Number(b.totalBudget ?? b.monthlyBudget ?? 0);
+        const totalSpent = Number(b.totalSpent ?? data.totalSpent ?? 0);
+        const remainingBudget = Number(b.remainingBudget ?? (totalBudget - totalSpent));
+        const spentPercentage = Number(b.spentPercentage ?? b.usedPercentage ?? 0);
+        const recommendedDaily = Number(b.recommendedDaily ?? b.recommendedDailySpending ?? 0);
+        const projectedMonthEnd = Number(b.projectedMonthEnd ?? b.projectedMonthEndSpending ?? totalSpent);
+        const alerts = b.alerts || b.activeAlerts || [];
+
+        const totalEl = document.getElementById('dash-budget-total');
+        if (totalEl) totalEl.textContent = `${curr}${Math.round(totalBudget).toLocaleString()}`;
+
+        const spentEl = document.getElementById('dash-budget-spent');
+        if (spentEl) spentEl.textContent = `${curr}${Math.round(totalSpent).toLocaleString()}`;
+
+        const remEl = document.getElementById('dash-budget-remaining');
+        if (remEl) remEl.textContent = `${curr}${Math.round(remainingBudget).toLocaleString()}`;
+
+        const pctEl = document.getElementById('dash-budget-percent');
+        if (pctEl) {
+            pctEl.textContent = totalBudget > 0 ? `${Math.round(spentPercentage)}% Used` : 'No budget set';
+        }
+
+        const fill = document.getElementById('dash-budget-progress-fill');
+        if (fill) {
+            fill.style.width = `${Math.min(100, Math.max(0, spentPercentage))}%`;
+            if (spentPercentage > 100) fill.style.background = '#E88C8C';
+            else if (spentPercentage >= 80) fill.style.background = '#E69C24';
+            else fill.style.background = 'var(--primary-sage)';
+        }
+
+        const recEl = document.getElementById('dash-recommended-daily');
+        if (recEl) {
+            recEl.textContent = `Recommended Daily: ${curr}${Math.round(recommendedDaily).toLocaleString()}/day`;
+        }
+        const projEl = document.getElementById('dash-projection-text');
+        if (projEl) {
+            projEl.textContent = `Projected Month-End: ${curr}${Math.round(projectedMonthEnd).toLocaleString()}`;
+        }
+
+        // Render alerts
+        const alertsBox = document.getElementById('dash-alerts-box');
+        if (alertsBox) {
+            alertsBox.innerHTML = '';
+            if (alerts && alerts.length > 0) {
+                alerts.forEach(alertText => {
+                    const badge = document.createElement('div');
+                    badge.className = 'badge badge-coral';
+                    badge.style.width = '100%';
+                    badge.style.padding = '8px 12px';
+                    badge.textContent = `⚠️ ${alertText}`;
+                    alertsBox.appendChild(badge);
+                });
+            }
+        }
+    } else {
+        if (budgetCard) budgetCard.style.display = 'none';
+    }
+
+    // Summary Stats
+    const totalSpentEl = document.getElementById('dash-total-spent');
+    if (totalSpentEl) totalSpentEl.textContent = `${curr}${Math.round(data.totalSpent || 0).toLocaleString()}`;
+
+    const todaySpentEl = document.getElementById('dash-today-spent');
+    if (todaySpentEl) todaySpentEl.textContent = `${curr}${Math.round(data.todaySpent || 0).toLocaleString()}`;
+
+    const dailyAvgEl = document.getElementById('dash-daily-avg');
+    if (dailyAvgEl) dailyAvgEl.textContent = `${curr}${Math.round(data.dailyAvg || 0).toLocaleString()}`;
+
+    const daysLeftEl = document.getElementById('dash-days-left');
+    const daysLeftVal = (data.daysLeft !== undefined && data.daysLeft !== null) ? data.daysLeft : 0;
+    if (daysLeftEl) daysLeftEl.textContent = daysLeftVal;
+
+    // Days left progress fill
+    const daysFill = document.getElementById('dash-days-left-fill');
+    if (daysFill) {
+        const now = new Date();
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const daysPassed = Math.max(1, daysInMonth - daysLeftVal);
+        const pct = Math.min(100, Math.round((daysPassed / daysInMonth) * 100));
+        daysFill.style.width = `${pct}%`;
+    }
+
+    // Categories List
+    const catContainer = document.getElementById('dash-categories-container');
+    catContainer.innerHTML = '';
+    if (data.categoriesBreakdown && data.categoriesBreakdown.length > 0) {
+        catContainer.className = 'dash-cat-grid';
+        data.categoriesBreakdown.forEach(item => {
+            const cat = item.category;
+            const catName = cat ? cat.name : 'Other';
+            const meta = getCategoryMeta(catName);
+            const card = document.createElement('div');
+            card.className = 'dash-cat-card';
+            card.onclick = () => {
+                navigate('transactions');
+                const txFilter = document.getElementById('tx-filter-cat');
+                if (txFilter && cat) {
+                    txFilter.value = cat.id;
+                    loadTransactions();
+                }
+            };
+            card.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: ${meta.bar}; display: inline-block;"></span>
+                    <div class="dash-cat-name">${escapeHtml(catName)}</div>
+                </div>
+                <div class="dash-cat-amount">${curr}${Math.round(item.amount).toLocaleString()}</div>
+                <div class="dash-cat-bar-wrap">
+                    <div class="dash-cat-bar">
+                        <div class="dash-cat-bar-fill" style="width: ${Math.min(100, Math.round(item.percentage))}%; background: ${meta.bar};"></div>
+                    </div>
+                    <span class="dash-cat-pct">${Math.round(item.percentage)}%</span>
+                </div>
+            `;
+            catContainer.appendChild(card);
+        });
+    } else {
+        catContainer.className = '';
+        catContainer.innerHTML = '<div class="text-muted" style="text-align: center; padding: 24px;">No expenses recorded this month. Tap "+ Add Expense" to begin.</div>';
+    }
+
+    // Daily Spending Trend Chart
+    renderDashTrendChart(data.dailySpending);
+
+    // Recent Transactions List
+    const recentList = document.getElementById('dash-recent-list');
+    recentList.innerHTML = '';
+    if (data.recentTransactions && data.recentTransactions.length > 0) {
+        data.recentTransactions.forEach(t => {
+            const catName = t.categoryName || (t.category ? t.category.name : 'Other');
+            const meta = getCategoryMeta(catName);
+            const item = document.createElement('div');
+            item.className = 'card';
+            item.style.padding = '12px 16px';
+            item.style.display = 'flex';
+            item.style.justifyContent = 'space-between';
+            item.style.alignItems = 'center';
+            item.innerHTML = `
+                <div>
+                    <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-charcoal);">${escapeHtml(t.description || catName)}</div>
+                    <div class="text-muted" style="font-size: 0.75rem;">${t.expenseDate} • <span class="badge" style="background: ${meta.bg}; color: ${meta.text}; font-size: 0.68rem; padding: 2px 7px;">${catName}</span> • <span class="badge badge-sage" style="font-size: 0.68rem; padding: 2px 7px;">${t.paymentMode || 'UPI'}</span></div>
+                </div>
+                <div style="font-weight: 800; font-size: 1.05rem; color: #1A2E26;">
+                    -${curr}${Number(t.amount || 0).toLocaleString()}
+                </div>
+            `;
+            recentList.appendChild(item);
+        });
+    } else {
+        recentList.innerHTML = '<div class="text-muted" style="text-align: center; padding: 18px;">No transactions recorded yet. Tap "+ Add Expense" to begin.</div>';
+    }
+}
+
 async function loadDashboard() {
+    // 1. Instant offline-first render from localStorage
+    const localList = getLocalExpenses();
+    if (localList && localList.length > 0) {
+        renderDashboardFromLocal(localList);
+    }
+
     try {
         const data = await apiFetch('/api/dashboard');
-        const curr = data.currency || '₹';
 
-        // Period Title
-        if (data.monthYearTitle) {
-            document.getElementById('top-period').textContent = data.monthYearTitle;
+        // Check if server database was wiped (totalSpent == 0) while local items exist
+        if ((!data.totalSpent || data.totalSpent === 0) && localList && localList.length > 0) {
+            console.log('Server reports 0 expenses while local entries exist. Synchronizing...');
+            await syncExpensesWithServer();
+            const refreshed = await apiFetch('/api/dashboard');
+            if (refreshed) {
+                renderServerDashboard(refreshed);
+                return;
+            }
         }
 
-        // Mode B Budget Card
-        const budgetCard = document.getElementById('dashboard-budget-card');
-        if (data.isBudgetMode && data.budgetSummary) {
-            if (budgetCard) budgetCard.style.display = 'block';
-            const b = data.budgetSummary;
-            const totalBudget = Number(b.totalBudget ?? b.monthlyBudget ?? 0);
-            const totalSpent = Number(b.totalSpent ?? data.totalSpent ?? 0);
-            const remainingBudget = Number(b.remainingBudget ?? (totalBudget - totalSpent));
-            const spentPercentage = Number(b.spentPercentage ?? b.usedPercentage ?? 0);
-            const recommendedDaily = Number(b.recommendedDaily ?? b.recommendedDailySpending ?? 0);
-            const projectedMonthEnd = Number(b.projectedMonthEnd ?? b.projectedMonthEndSpending ?? totalSpent);
-            const alerts = b.alerts || b.activeAlerts || [];
-
-            const totalEl = document.getElementById('dash-budget-total');
-            if (totalEl) totalEl.textContent = `${curr}${Math.round(totalBudget).toLocaleString()}`;
-
-            const spentEl = document.getElementById('dash-budget-spent');
-            if (spentEl) spentEl.textContent = `${curr}${Math.round(totalSpent).toLocaleString()}`;
-
-            const remEl = document.getElementById('dash-budget-remaining');
-            if (remEl) remEl.textContent = `${curr}${Math.round(remainingBudget).toLocaleString()}`;
-
-            const pctEl = document.getElementById('dash-budget-percent');
-            if (pctEl) {
-                pctEl.textContent = totalBudget > 0 ? `${Math.round(spentPercentage)}% Used` : 'No budget set';
-            }
-
-            const fill = document.getElementById('dash-budget-progress-fill');
-            if (fill) {
-                fill.style.width = `${Math.min(100, Math.max(0, spentPercentage))}%`;
-                if (spentPercentage > 100) fill.style.background = '#E88C8C';
-                else if (spentPercentage >= 80) fill.style.background = '#E69C24';
-                else fill.style.background = 'var(--primary-sage)';
-            }
-
-            const recEl = document.getElementById('dash-recommended-daily');
-            if (recEl) {
-                recEl.textContent = `Recommended Daily: ${curr}${Math.round(recommendedDaily).toLocaleString()}/day`;
-            }
-            const projEl = document.getElementById('dash-projection-text');
-            if (projEl) {
-                projEl.textContent = `Projected Month-End: ${curr}${Math.round(projectedMonthEnd).toLocaleString()}`;
-            }
-
-            // Render alerts
-            const alertsBox = document.getElementById('dash-alerts-box');
-            if (alertsBox) {
-                alertsBox.innerHTML = '';
-                if (alerts && alerts.length > 0) {
-                    alerts.forEach(alertText => {
-                        const badge = document.createElement('div');
-                        badge.className = 'badge badge-coral';
-                        badge.style.width = '100%';
-                        badge.style.padding = '8px 12px';
-                        badge.textContent = `⚠️ ${alertText}`;
-                        alertsBox.appendChild(badge);
-                    });
-                }
-            }
-        } else {
-            if (budgetCard) budgetCard.style.display = 'none';
-        }
-
-        // Summary Stats
-        const totalSpentEl = document.getElementById('dash-total-spent');
-        if (totalSpentEl) totalSpentEl.textContent = `${curr}${Math.round(data.totalSpent || 0).toLocaleString()}`;
-
-        const todaySpentEl = document.getElementById('dash-today-spent');
-        if (todaySpentEl) todaySpentEl.textContent = `${curr}${Math.round(data.todaySpent || 0).toLocaleString()}`;
-
-        const dailyAvgEl = document.getElementById('dash-daily-avg');
-        if (dailyAvgEl) dailyAvgEl.textContent = `${curr}${Math.round(data.dailyAvg || 0).toLocaleString()}`;
-
-        const daysLeftEl = document.getElementById('dash-days-left');
-        const daysLeftVal = (data.daysLeft !== undefined && data.daysLeft !== null) ? data.daysLeft : 0;
-        if (daysLeftEl) daysLeftEl.textContent = daysLeftVal;
-
-        // Days left progress fill
-        const daysFill = document.getElementById('dash-days-left-fill');
-        if (daysFill) {
-            const now = new Date();
-            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            const daysPassed = Math.max(1, daysInMonth - daysLeftVal);
-            const pct = Math.min(100, Math.round((daysPassed / daysInMonth) * 100));
-            daysFill.style.width = `${pct}%`;
-        }
-
-        // Categories List (Rendered as attractive squircle cards matching reference image)
-        const catContainer = document.getElementById('dash-categories-container');
-        catContainer.innerHTML = '';
-        if (data.categoriesBreakdown && data.categoriesBreakdown.length > 0) {
-            catContainer.className = 'dash-cat-grid';
-            data.categoriesBreakdown.forEach(item => {
-                const cat = item.category;
-                const meta = getCategoryMeta(cat.name);
-                const card = document.createElement('div');
-                card.className = 'dash-cat-card';
-                card.onclick = () => {
-                    navigate('transactions');
-                    const txFilter = document.getElementById('tx-filter-cat');
-                    if (txFilter) {
-                        txFilter.value = cat.id;
-                        loadTransactions();
-                    }
-                };
-                card.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: ${meta.bar}; display: inline-block;"></span>
-                        <div class="dash-cat-name">${escapeHtml(cat.name)}</div>
-                    </div>
-                    <div class="dash-cat-amount">${curr}${Math.round(item.amount).toLocaleString()}</div>
-                    <div class="dash-cat-bar-wrap">
-                        <div class="dash-cat-bar">
-                            <div class="dash-cat-bar-fill" style="width: ${Math.min(100, Math.round(item.percentage))}%; background: ${meta.bar};"></div>
-                        </div>
-                        <span class="dash-cat-pct">${Math.round(item.percentage)}%</span>
-                    </div>
-                `;
-                catContainer.appendChild(card);
-            });
-        } else {
-            catContainer.className = '';
-            catContainer.innerHTML = '<div class="text-muted" style="text-align: center; padding: 24px;">No expenses recorded this month. Tap "+ Add Expense" to begin.</div>';
-        }
-
-        // Daily Spending Trend Chart
-        renderDashTrendChart(data.dailySpending);
-
-        // Recent Transactions List
-        const recentList = document.getElementById('dash-recent-list');
-        recentList.innerHTML = '';
-        if (data.recentTransactions && data.recentTransactions.length > 0) {
-            data.recentTransactions.forEach(t => {
-                const catName = t.categoryName || (t.category ? t.category.name : 'Other');
-                const meta = getCategoryMeta(catName);
-                const item = document.createElement('div');
-                item.className = 'card';
-                item.style.padding = '12px 16px';
-                item.style.display = 'flex';
-                item.style.justifyContent = 'space-between';
-                item.style.alignItems = 'center';
-                item.innerHTML = `
-                    <div>
-                        <div style="font-weight: 700; font-size: 0.92rem; color: var(--text-charcoal);">${escapeHtml(t.description || catName)}</div>
-                        <div class="text-muted" style="font-size: 0.75rem;">${t.expenseDate} • <span class="badge" style="background: ${meta.bg}; color: ${meta.text}; font-size: 0.68rem; padding: 2px 7px;">${catName}</span> • <span class="badge badge-sage" style="font-size: 0.68rem; padding: 2px 7px;">${t.paymentMode}</span></div>
-                    </div>
-                    <div style="font-weight: 800; font-size: 1.05rem; color: #1A2E26;">
-                        -${curr}${Number(t.amount || 0).toLocaleString()}
-                    </div>
-                `;
-                recentList.appendChild(item);
-            });
-        } else {
-            recentList.innerHTML = '<div class="text-muted" style="text-align: center; padding: 18px;">No transactions recorded yet. Tap "+ Add Expense" to begin.</div>';
-        }
-
+        renderServerDashboard(data);
     } catch (e) {
-        console.error('Error loading dashboard:', e);
+        console.error('Error loading dashboard from server:', e);
+        // Offline or server cold-starting: local data already displayed
     }
 }
 
@@ -904,54 +1293,106 @@ async function populateCategoryDropdowns() {
 }
 
 // --- Transactions History View ---
-async function loadTransactions() {
-    try {
-        const search = document.getElementById('tx-search').value.trim();
-        const catId = document.getElementById('tx-filter-cat').value;
-        const pay = document.getElementById('tx-filter-pay').value;
-        const sort = document.getElementById('tx-filter-sort').value;
+function renderTransactionsTable(expenses) {
+    const curr = (currentUser && currentUser.currency) || '₹';
+    const total = (expenses || []).reduce((s, x) => s + (parseFloat(x.amount) || 0), 0);
+    const countBadge = document.getElementById('tx-count-badge');
+    if (countBadge) countBadge.textContent = `${(expenses || []).length} items`;
+    const totalBadge = document.getElementById('tx-total-badge');
+    if (totalBadge) totalBadge.textContent = `Total: ${curr}${Math.round(total).toLocaleString()}`;
 
+    const tbody = document.getElementById('tx-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (expenses && expenses.length > 0) {
+        expenses.forEach(e => {
+            const catName = e.categoryName || (e.category ? e.category.name : 'Other');
+            const meta = getCategoryMeta(catName);
+            const tr = document.createElement('tr');
+            const deleteArg = e.id ? e.id : `'${e.tempId}'`;
+            tr.innerHTML = `
+                <td data-label="Date" style="font-weight: 600;">${e.expenseDate}</td>
+                <td data-label="Category">
+                    <span class="badge" style="background: ${meta.bg}; color: ${meta.text}; font-weight: 700; font-size: 0.82rem; padding: 4px 10px; border-radius: 8px;">
+                        ${escapeHtml(catName)}
+                    </span>
+                </td>
+                <td data-label="Description">${escapeHtml(e.description || catName)}</td>
+                <td data-label="Payment Mode"><span class="badge badge-sage">${e.paymentMode || 'UPI'}</span></td>
+                <td data-label="Amount" style="font-weight: 800; color: #1A2E26;">-${curr}${Number(e.amount || 0).toLocaleString()}</td>
+                <td data-label="Actions" style="text-align: right;">
+                    <button class="btn btn-secondary btn-small" onclick='editExpense(${JSON.stringify(e)})' title="Edit">Edit</button>
+                    <button class="btn btn-danger btn-small" onclick="deleteExpense(${deleteArg})" title="Delete" style="margin-left: 4px;">Delete</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } else {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No matching transactions found.</td></tr>`;
+    }
+}
+
+async function loadTransactions() {
+    const search = document.getElementById('tx-search') ? document.getElementById('tx-search').value.trim() : '';
+    const catId = document.getElementById('tx-filter-cat') ? document.getElementById('tx-filter-cat').value : '';
+    const pay = document.getElementById('tx-filter-pay') ? document.getElementById('tx-filter-pay').value : '';
+    const sort = document.getElementById('tx-filter-sort') ? document.getElementById('tx-filter-sort').value : 'DATE_DESC';
+
+    // 1. Instant render from local cache
+    const localList = getLocalExpenses();
+    if (localList && localList.length > 0) {
+        let filtered = [...localList];
+        if (search) {
+            const q = search.toLowerCase();
+            filtered = filtered.filter(x => (x.description && x.description.toLowerCase().includes(q)) ||
+                                            (x.categoryName && x.categoryName.toLowerCase().includes(q)));
+        }
+        if (catId) {
+            filtered = filtered.filter(x => String(x.categoryId || (x.category && x.category.id)) === String(catId));
+        }
+        if (pay) {
+            filtered = filtered.filter(x => x.paymentMode === pay);
+        }
+        if (sort === 'DATE_DESC') {
+            filtered.sort((a, b) => (b.expenseDate || '').localeCompare(a.expenseDate || ''));
+        } else if (sort === 'DATE_ASC') {
+            filtered.sort((a, b) => (a.expenseDate || '').localeCompare(b.expenseDate || ''));
+        } else if (sort === 'AMOUNT_DESC') {
+            filtered.sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0));
+        } else if (sort === 'AMOUNT_ASC') {
+            filtered.sort((a, b) => (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0));
+        }
+        renderTransactionsTable(filtered);
+    }
+
+    try {
         let url = `/api/expenses?sortBy=${encodeURIComponent(sort)}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
         if (catId) url += `&categoryId=${encodeURIComponent(catId)}`;
         if (pay) url += `&paymentMode=${encodeURIComponent(pay)}`;
 
         const data = await apiFetch(url);
-        const curr = (currentUser && currentUser.currency) || '₹';
+        if (data && data.expenses) {
+            if (data.expenses.length === 0 && localList && localList.length > 0 && !search && !catId && !pay) {
+                console.log('Server reports 0 transactions while local list has items. Syncing...');
+                await syncExpensesWithServer();
+                const refData = await apiFetch(url);
+                if (refData && refData.expenses) {
+                    renderTransactionsTable(refData.expenses);
+                    return;
+                }
+            }
 
-        document.getElementById('tx-count-badge').textContent = `${data.count} items`;
-        document.getElementById('tx-total-badge').textContent = `Total: ${curr}${data.total.toLocaleString()}`;
-
-        const tbody = document.getElementById('tx-table-body');
-        tbody.innerHTML = '';
-
-        if (data.expenses && data.expenses.length > 0) {
-            data.expenses.forEach(e => {
-                const catName = e.categoryName || (e.category ? e.category.name : 'Other');
-                const meta = getCategoryMeta(catName);
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td data-label="Date" style="font-weight: 600;">${e.expenseDate}</td>
-                    <td data-label="Category">
-                        <span class="badge" style="background: ${meta.bg}; color: ${meta.text}; font-weight: 700; font-size: 0.82rem; padding: 4px 10px; border-radius: 8px;">
-                            ${escapeHtml(catName)}
-                        </span>
-                    </td>
-                    <td data-label="Description">${escapeHtml(e.description || catName)}</td>
-                    <td data-label="Payment Mode"><span class="badge badge-sage">${e.paymentMode}</span></td>
-                    <td data-label="Amount" style="font-weight: 800; color: #1A2E26;">-${curr}${Number(e.amount || 0).toLocaleString()}</td>
-                    <td data-label="Actions" style="text-align: right;">
-                        <button class="btn btn-secondary btn-small" onclick='editExpense(${JSON.stringify(e)})' title="Edit">Edit</button>
-                        <button class="btn btn-danger btn-small" onclick="deleteExpense(${e.id})" title="Delete" style="margin-left: 4px;">Delete</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        } else {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No matching transactions found.</td></tr>`;
+            renderTransactionsTable(data.expenses);
+            // If full listing without filters, refresh local storage cache
+            if (!search && !catId && !pay && data.expenses.length > 0) {
+                saveLocalExpenses(data.expenses);
+            }
         }
     } catch (e) {
-        console.error('Error loading transactions:', e);
+        console.error('Error loading transactions from server:', e);
+        // Offline or slow network: local render already displayed items
     }
 }
 
@@ -1067,7 +1508,41 @@ async function handleSaveExpense(e) {
     }
 
     const payload = { amount, categoryId, paymentMode, expenseDate, description };
+    const tempId = 'temp_' + Date.now();
+    const localItem = {
+        id: id ? parseInt(id) : null,
+        tempId: id ? null : tempId,
+        amount,
+        categoryId,
+        categoryName: selectedCategoryName || 'Expense',
+        category: { id: categoryId, name: selectedCategoryName || 'Expense' },
+        paymentMode,
+        expenseDate,
+        description
+    };
 
+    // 1. Immediately store in client storage so data is NEVER lost
+    if (id) {
+        localItem.id = parseInt(id);
+        updateLocalExpense(localItem);
+    } else {
+        addLocalExpense(localItem);
+    }
+
+    // 2. Immediately close modal and refresh active view with 0 lag
+    closeExpenseModal();
+    showToast(id ? 'Expense updated!' : `Expense of ₹${amount.toFixed(2)} recorded! 🎉`, 'success');
+
+    switch (currentView) {
+        case 'dashboard': loadDashboard(); break;
+        case 'transactions': loadTransactions(); break;
+        case 'calendar': loadCalendar(); break;
+        case 'budget': loadBudgetView(); break;
+        case 'analytics': loadAnalytics(); break;
+        default: loadDashboard(); break;
+    }
+
+    // 3. Persist to server in background
     try {
         if (id) {
             payload.id = parseInt(id);
@@ -1075,26 +1550,18 @@ async function handleSaveExpense(e) {
                 method: 'PUT',
                 body: payload
             });
-            showToast('Expense updated successfully!', 'success');
         } else {
-            await apiFetch('/api/expenses', {
+            const created = await apiFetch('/api/expenses', {
                 method: 'POST',
                 body: payload
             });
-            showToast(`Expense of ₹${amount.toFixed(2)} recorded successfully! 🎉`, 'success');
-        }
-
-        closeExpenseModal();
-        switch (currentView) {
-            case 'dashboard': loadDashboard(); break;
-            case 'transactions': loadTransactions(); break;
-            case 'calendar': loadCalendar(); break;
-            case 'budget': loadBudgetView(); break;
-            case 'analytics': loadAnalytics(); break;
-            default: loadDashboard(); break;
+            if (created && created.id) {
+                localItem.id = created.id;
+                updateLocalExpense(localItem);
+            }
         }
     } catch (err) {
-        showToast('Error saving expense: ' + err.message, 'error');
+        console.warn('Network sync notice (data is safely preserved in local storage):', err.message);
     }
 }
 
@@ -1104,19 +1571,27 @@ function editExpense(exp) {
 
 async function deleteExpense(id) {
     if (!confirm('Are you sure you want to delete this expense record?')) return;
-    try {
-        await apiFetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
-        showToast('Expense deleted successfully.', 'info');
-        switch (currentView) {
-            case 'dashboard': loadDashboard(); break;
-            case 'transactions': loadTransactions(); break;
-            case 'calendar': loadCalendar(); break;
-            case 'budget': loadBudgetView(); break;
-            case 'analytics': loadAnalytics(); break;
-            default: loadDashboard(); break;
+
+    // 1. Immediately remove from local storage and update view
+    deleteLocalExpense(id);
+    showToast('Expense deleted successfully.', 'info');
+
+    switch (currentView) {
+        case 'dashboard': loadDashboard(); break;
+        case 'transactions': loadTransactions(); break;
+        case 'calendar': loadCalendar(); break;
+        case 'budget': loadBudgetView(); break;
+        case 'analytics': loadAnalytics(); break;
+        default: loadDashboard(); break;
+    }
+
+    // 2. Delete on server if it's a persisted numeric server ID
+    if (typeof id === 'number' || (typeof id === 'string' && !id.startsWith('temp_') && !id.startsWith('loc_'))) {
+        try {
+            await apiFetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
+        } catch (err) {
+            console.warn('Server delete sync notice:', err.message);
         }
-    } catch (err) {
-        showToast('Failed to delete expense: ' + err.message, 'error');
     }
 }
 

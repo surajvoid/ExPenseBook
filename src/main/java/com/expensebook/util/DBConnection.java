@@ -16,6 +16,7 @@ public class DBConnection {
     private static Connection connection;
     private static Properties config = new Properties();
     private static boolean isMySQL = true;
+    private static boolean isPostgres = false;
     private static final String PROPERTIES_FILE = "db.properties";
 
     static {
@@ -78,7 +79,29 @@ public class DBConnection {
             if (clean.startsWith("jdbc:")) {
                 clean = clean.substring(5);
             }
-            if (clean.startsWith("mysql://")) {
+            if (clean.startsWith("postgres://") || clean.startsWith("postgresql://")) {
+                int schemeEnd = clean.indexOf("://") + 3;
+                clean = clean.substring(schemeEnd);
+                String userInfo = clean.substring(0, clean.indexOf('@'));
+                String hostPortDb = clean.substring(clean.indexOf('@') + 1);
+
+                String[] userParts = userInfo.split(":", 2);
+                config.setProperty("db.user", userParts[0]);
+                if (userParts.length > 1) config.setProperty("db.password", userParts[1]);
+
+                String hostPort = hostPortDb.substring(0, hostPortDb.indexOf('/'));
+                String dbAndParams = hostPortDb.substring(hostPortDb.indexOf('/') + 1);
+
+                String[] hp = hostPort.split(":", 2);
+                config.setProperty("db.host", hp[0]);
+                if (hp.length > 1) config.setProperty("db.port", hp[1]);
+                else config.setProperty("db.port", "5432");
+
+                String dbName = dbAndParams.contains("?") ? dbAndParams.substring(0, dbAndParams.indexOf('?')) : dbAndParams;
+                config.setProperty("db.database", dbName);
+                config.setProperty("db.type", "postgres");
+                config.setProperty("db.ssl", "true");
+            } else if (clean.startsWith("mysql://")) {
                 clean = clean.substring(8);
                 String userInfo = clean.substring(0, clean.indexOf('@'));
                 String hostPortDb = clean.substring(clean.indexOf('@') + 1);
@@ -113,7 +136,33 @@ public class DBConnection {
             String dbType = config.getProperty("db.type", "mysql").toLowerCase();
             boolean fallback = Boolean.parseBoolean(config.getProperty("db.fallback_to_sqlite", "true"));
 
-            if ("mysql".equals(dbType)) {
+            if ("postgres".equals(dbType) || "postgresql".equals(dbType)) {
+                try {
+                    Class.forName("org.postgresql.Driver");
+                    String host = config.getProperty("db.host", "localhost");
+                    String port = config.getProperty("db.port", "5432");
+                    String database = config.getProperty("db.database", "expensebook");
+                    String user = config.getProperty("db.user", "postgres");
+                    String password = config.getProperty("db.password", "");
+                    boolean ssl = Boolean.parseBoolean(config.getProperty("db.ssl", "true"));
+
+                    String url = String.format("jdbc:postgresql://%s:%s/%s%s",
+                            host, port, database, ssl ? "?sslmode=require" : "");
+
+                    connection = DriverManager.getConnection(url, user, password);
+                    isMySQL = false;
+                    isPostgres = true;
+                    System.out.println(" Connected to PostgreSQL database [" + database + "] successfully.");
+                    initializeDatabase();
+                    return connection;
+                } catch (Exception pgEx) {
+                    System.err.println(" PostgreSQL connection failed: " + pgEx.getMessage());
+                    if (!fallback) {
+                        throw new RuntimeException("Could not connect to PostgreSQL: " + pgEx.getMessage(), pgEx);
+                    }
+                    System.out.println(" Falling back to local embedded SQLite database for zero-downtime execution...");
+                }
+            } else if ("mysql".equals(dbType)) {
                 try {
                     Class.forName("com.mysql.cj.jdbc.Driver");
                     String host = config.getProperty("db.host", "localhost");
@@ -129,6 +178,7 @@ public class DBConnection {
 
                     connection = DriverManager.getConnection(url, user, password);
                     isMySQL = true;
+                    isPostgres = false;
                     System.out.println(" Connected to MySQL database [" + database + "] successfully.");
                     initializeDatabase();
                     return connection;
@@ -245,8 +295,22 @@ public class DBConnection {
 
     private static void initializeDatabase() {
         try (Statement stmt = connection.createStatement()) {
-            String autoInc = isMySQL ? "AUTO_INCREMENT" : "AUTOINCREMENT";
-            String primaryKey = isMySQL ? "INT AUTO_INCREMENT PRIMARY KEY" : "INTEGER PRIMARY KEY AUTOINCREMENT";
+            String primaryKey;
+            String boolDefault;
+            String boolZero;
+            if (isPostgres) {
+                primaryKey = "SERIAL PRIMARY KEY";
+                boolDefault = "DEFAULT TRUE";
+                boolZero = "DEFAULT FALSE";
+            } else if (isMySQL) {
+                primaryKey = "INT AUTO_INCREMENT PRIMARY KEY";
+                boolDefault = "DEFAULT 1";
+                boolZero = "DEFAULT 0";
+            } else {
+                primaryKey = "INTEGER PRIMARY KEY AUTOINCREMENT";
+                boolDefault = "DEFAULT 1";
+                boolZero = "DEFAULT 0";
+            }
 
             // 1. Users table
             stmt.execute("CREATE TABLE IF NOT EXISTS users (" +
@@ -257,7 +321,7 @@ public class DBConnection {
                     "role VARCHAR(20) DEFAULT 'USER', " +
                     "financial_mode VARCHAR(30) DEFAULT 'TRACK_ONLY', " +
                     "currency VARCHAR(10) DEFAULT '₹', " +
-                    "is_active BOOLEAN DEFAULT 1, " +
+                    "is_active BOOLEAN " + boolDefault + ", " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
             // 2. Categories table
@@ -267,7 +331,7 @@ public class DBConnection {
                     "name VARCHAR(50) NOT NULL, " +
                     "icon_name VARCHAR(50) NOT NULL, " +
                     "color VARCHAR(20) DEFAULT '#78BFA0', " +
-                    "is_default BOOLEAN DEFAULT 1, " +
+                    "is_default BOOLEAN " + boolDefault + ", " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
             // 3. Expenses table
@@ -317,7 +381,7 @@ public class DBConnection {
                     "frequency VARCHAR(30) DEFAULT 'MONTHLY', " +
                     "payment_mode VARCHAR(30) NOT NULL, " +
                     "next_due_date DATE NOT NULL, " +
-                    "is_active BOOLEAN DEFAULT 1, " +
+                    "is_active BOOLEAN " + boolDefault + ", " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
             // 8. Dedicated UPI Transactions table (STRICT SEPARATION: separate from main expenses table)
@@ -329,10 +393,10 @@ public class DBConnection {
                     "category_name VARCHAR(50) NOT NULL, " +
                     "source_app VARCHAR(50) NOT NULL, " +
                     "upi_ref VARCHAR(100) NOT NULL, " +
-                    "is_debit BOOLEAN DEFAULT 1, " +
+                    "is_debit BOOLEAN " + boolDefault + ", " +
                     "transaction_date DATE NOT NULL, " +
                     "raw_message TEXT, " +
-                    "imported_to_expensebook BOOLEAN DEFAULT 0, " +
+                    "imported_to_expensebook BOOLEAN " + boolZero + ", " +
                     "imported_expense_id INTEGER NULL, " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
@@ -374,7 +438,7 @@ public class DBConnection {
 
                 for (String[] cat : defaultCats) {
                     stmt.executeUpdate(String.format(
-                            "INSERT INTO categories (user_id, name, icon_name, color, is_default) VALUES (NULL, '%s', '%s', '%s', 1)",
+                            "INSERT INTO categories (user_id, name, icon_name, color, is_default) VALUES (NULL, '%s', '%s', '%s', TRUE)",
                             cat[0], cat[1], cat[2]
                     ));
                 }
@@ -395,7 +459,7 @@ public class DBConnection {
                 String hash = PasswordUtil.hashPassword("Admin@123");
                 stmt.executeUpdate(String.format(
                         "INSERT INTO users (full_name, email, password_hash, role, financial_mode, currency, is_active) " +
-                                "VALUES ('System Admin', 'admin@expensebook.com', '%s', 'ADMIN', 'TRACK_AND_BUDGET', '₹', 1)",
+                                "VALUES ('System Admin', 'admin@expensebook.com', '%s', 'ADMIN', 'TRACK_AND_BUDGET', '₹', TRUE)",
                         hash
                 ));
                 System.out.println(" Seeded default administrator account: admin@expensebook.com (Pass: Admin@123)");

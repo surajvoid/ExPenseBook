@@ -51,6 +51,13 @@
             <version>3.45.1.0</version>
         </dependency>
 
+        <!-- PostgreSQL JDBC Driver for Production Cloud Database (Render, Supabase, Neon) -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.3</version>
+        </dependency>
+
         <!-- BCrypt for password hashing -->
         <dependency>
             <groupId>org.mindrot</groupId>
