@@ -76,7 +76,10 @@
                             </button>
                         </div>
                     </div>
-                    <button type="submit" id="btn-login" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; border-radius: 12px; margin-top: 6px;">Sign In →</button>
+                    <div style="display: flex; justify-content: flex-end; margin-top: -6px; margin-bottom: 14px;">
+                        <a href="javascript:void(0)" onclick="switchAuthView('forgot')" style="font-size: 0.78rem; color: #0D382B; font-weight: 600; text-decoration: none;">Forgot Password?</a>
+                    </div>
+                    <button type="submit" id="btn-login" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; border-radius: 12px; margin-top: 2px;">Sign In →</button>
                 </form>
 
                 <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); text-align: center;">
@@ -144,6 +147,57 @@
                     </div>
                 </div>
                 <button type="button" class="btn btn-primary" onclick="finalizePersonalization()" style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; border-radius: 12px;">Launch Dashboard →</button>
+            </div>
+
+            <!-- 4. FORGOT / RESET PASSWORD VIEW -->
+            <div id="view-forgot" style="display: none;">
+                <div id="forgot-step-1">
+                    <h2 style="font-size: 1.15rem; margin-bottom: 6px; color: #0D382B; text-align: center;">Reset Password</h2>
+                    <p class="text-muted" style="font-size: 0.8rem; text-align: center; margin-bottom: 16px;">Enter your account email to receive a 6-digit verification code.</p>
+                    <form onsubmit="handleForgotPasswordSubmit(event)">
+                        <div class="form-group">
+                            <label class="form-label" for="forgot-email">Registered Email</label>
+                            <input type="email" id="forgot-email" class="form-input" required autocomplete="email" inputmode="email" placeholder="name@example.com">
+                        </div>
+                        <button type="submit" id="btn-forgot-request" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; border-radius: 12px; margin-top: 6px;">Get Reset Code →</button>
+                    </form>
+                </div>
+
+                <div id="forgot-step-2" style="display: none;">
+                    <h2 style="font-size: 1.15rem; margin-bottom: 6px; color: #0D382B; text-align: center;">Set New Password</h2>
+                    <p class="text-muted" style="font-size: 0.8rem; text-align: center; margin-bottom: 16px;">Enter the 6-digit code and choose a new password.</p>
+                    <form onsubmit="handleResetPasswordSubmit(event)">
+                        <div class="form-group">
+                            <label class="form-label" for="reset-code">6-Digit Reset Code</label>
+                            <input type="text" id="reset-code" class="form-input" required maxlength="6" pattern="[0-9]{6}" inputmode="numeric" placeholder="e.g. 123456" style="letter-spacing: 3px; font-weight: 700; text-align: center; font-size: 1.1rem;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="reset-new-pass">New Password</label>
+                            <div class="password-wrap">
+                                <input type="password" id="reset-new-pass" class="form-input" placeholder="At least 6 characters" minlength="6" required autocomplete="new-password">
+                                <button type="button" class="eye-toggle" onclick="togglePasswordVisibility('reset-new-pass', this)" aria-label="Toggle password" tabindex="-1">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="reset-conf-pass">Confirm New Password</label>
+                            <div class="password-wrap">
+                                <input type="password" id="reset-conf-pass" class="form-input" placeholder="Re-enter new password" minlength="6" required autocomplete="new-password">
+                                <button type="button" class="eye-toggle" onclick="togglePasswordVisibility('reset-conf-pass', this)" aria-label="Toggle password" tabindex="-1">
+                                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="submit" id="btn-reset-submit" class="btn btn-primary" style="width: 100%; padding: 13px; font-size: 0.95rem; font-weight: 700; border-radius: 12px; margin-top: 6px;">Reset Password →</button>
+                    </form>
+                </div>
+
+                <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-color); text-align: center;">
+                    <p style="font-size: 0.82rem; color: var(--text-muted);">
+                        Remember your password? <a href="javascript:void(0)" onclick="switchAuthView('login')" style="color: #0D382B; font-weight: 700; text-decoration: none;">Back to Sign In</a>
+                    </p>
+                </div>
             </div>
         </div>
     </div>

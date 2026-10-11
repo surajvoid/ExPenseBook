@@ -6,12 +6,20 @@ import com.expensebook.service.*;
 import com.expensebook.util.CurrencyUtil;
 import com.expensebook.util.DBConnection;
 import com.expensebook.util.DateUtil;
+import com.expensebook.util.PasswordUtil;
+import com.expensebook.util.RateLimiter;
 import com.expensebook.util.SessionManager;
 import com.expensebook.util.SessionTokenUtil;
+import com.expensebook.util.ValidationUtil;
 import com.google.gson.*;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 import java.io.*;
 import java.net.InetSocketAddress;
@@ -54,6 +62,7 @@ public class WebServer {
     private final ReportService reportService = new ReportService();
     private final GeminiAiService geminiAiService = new GeminiAiService();
     private final UpiService upiService = new UpiService();
+    private final RateLimiter rateLimiter = new RateLimiter();
 
     // Map token -> User for web sessions
     private static final Map<String, User> activeSessions = new java.util.concurrent.ConcurrentHashMap<>();
@@ -72,11 +81,13 @@ public class WebServer {
         // Static Web UI Handler
         server.createContext("/", new StaticHandler());
 
-        // API Contexts - Main ExpenseBook
+        // API Contexts - Main ExpenseBook Authentication
         server.createContext("/api/auth/register", this::handleRegister);
         server.createContext("/api/auth/login", this::handleLogin);
         server.createContext("/api/auth/current", this::handleGetCurrentUser);
         server.createContext("/api/auth/logout", this::handleLogout);
+        server.createContext("/api/auth/forgot-password", this::handleForgotPassword);
+        server.createContext("/api/auth/reset-password", this::handleResetPassword);
 
         server.createContext("/api/dashboard", this::handleDashboard);
         server.createContext("/api/expenses", this::handleExpenses);
@@ -135,17 +146,28 @@ public class WebServer {
         try {
             JsonObject json = parseJsonBody(ex);
             String name = json.get("fullName").getAsString();
-            String email = json.get("email").getAsString();
+            String email = json.get("email").getAsString().trim().toLowerCase();
             String password = json.get("password").getAsString();
             String confirmPassword = json.get("confirmPassword").getAsString();
             String modeStr = json.has("mode") ? json.get("mode").getAsString() : "TRACK_ONLY";
             FinancialMode mode = FinancialMode.fromString(modeStr);
 
+            String clientIp = getClientIp(ex);
+            if (!rateLimiter.tryAcquire("reg:" + clientIp, 10, 60_000L)) {
+                sendError(ex, 429, "Too many registration attempts. Please wait a moment.");
+                return;
+            }
+
             User user = userService.register(name, email, password, confirmPassword, mode);
-            String token = SessionTokenUtil.generateToken(user);
+
+            // Generate unique active session ID
+            String sessionId = UUID.randomUUID().toString();
+            userDAO.updateSessionId(user.getId(), sessionId);
+            user.setCurrentSessionId(sessionId);
+
+            String token = SessionTokenUtil.generateToken(user, sessionId);
             if (token == null) token = UUID.randomUUID().toString();
             activeSessions.put(token, user);
-            SessionManager.setCurrentUser(user);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -164,14 +186,31 @@ public class WebServer {
         }
         try {
             JsonObject json = parseJsonBody(ex);
-            String email = json.get("email").getAsString();
-            String password = json.get("password").getAsString();
+            String email = json.has("email") ? json.get("email").getAsString().trim().toLowerCase() : "";
+            String password = json.has("password") ? json.get("password").getAsString() : "";
+
+            String clientIp = getClientIp(ex);
+            // Rate limit: max 5 login attempts per minute per IP / email
+            String rateKey = "login:" + clientIp + ":" + email;
+            if (!rateLimiter.tryAcquire(rateKey, 5, 60_000L)) {
+                sendError(ex, 429, "Too many login attempts. Please wait 1 minute before trying again.");
+                return;
+            }
 
             User user = userService.login(email, password);
-            String token = SessionTokenUtil.generateToken(user);
+            rateLimiter.reset(rateKey);
+
+            // Single Active Session: Generate fresh session ID to invalidate any previous device sessions
+            String sessionId = UUID.randomUUID().toString();
+            userDAO.updateSessionId(user.getId(), sessionId);
+            user.setCurrentSessionId(sessionId);
+
+            // Invalidate any previously cached tokens for this user in server memory
+            activeSessions.entrySet().removeIf(entry -> entry.getValue().getId() == user.getId());
+
+            String token = SessionTokenUtil.generateToken(user, sessionId);
             if (token == null) token = UUID.randomUUID().toString();
             activeSessions.put(token, user);
-            SessionManager.setCurrentUser(user);
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("success", true);
@@ -186,7 +225,7 @@ public class WebServer {
     private void handleGetCurrentUser(HttpExchange ex) throws IOException {
         User user = authenticate(ex);
         if (user == null) {
-            sendError(ex, 401, "Not logged in");
+            sendError(ex, 401, "Not logged in or session expired.");
             return;
         }
         Map<String, Object> resp = new HashMap<>();
@@ -196,11 +235,152 @@ public class WebServer {
 
     private void handleLogout(HttpExchange ex) throws IOException {
         String token = getToken(ex);
-        if (token != null) activeSessions.remove(token);
+        if (token != null) {
+            User u = activeSessions.remove(token);
+            if (u != null) {
+                try {
+                    userDAO.clearSessionId(u.getId());
+                } catch (Exception ignored) {}
+            }
+        }
         SessionManager.logout();
         Map<String, Object> resp = new HashMap<>();
         resp.put("success", true);
         sendJsonResponse(ex, 200, resp);
+    }
+
+    private void handleForgotPassword(HttpExchange ex) throws IOException {
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            sendMethodNotAllowed(ex);
+            return;
+        }
+        try {
+            JsonObject json = parseJsonBody(ex);
+            String email = json.has("email") ? json.get("email").getAsString().trim().toLowerCase() : "";
+            if (!ValidationUtil.isValidEmail(email)) {
+                sendError(ex, 400, "Please enter a valid email address.");
+                return;
+            }
+
+            String clientIp = getClientIp(ex);
+            // Rate limit: max 3 requests per 15 minutes per IP or email
+            if (!rateLimiter.tryAcquire("forgot:" + clientIp + ":" + email, 3, 15 * 60_000L)) {
+                sendError(ex, 429, "Too many password reset requests. Please wait 15 minutes before requesting again.");
+                return;
+            }
+
+            User user = userDAO.findByEmail(email);
+            if (user == null) {
+                // Generic response to prevent user enumeration
+                Map<String, Object> resp = new HashMap<>();
+                resp.put("success", true);
+                resp.put("message", "If an account exists with this email, a reset code has been generated.");
+                sendJsonResponse(ex, 200, resp);
+                return;
+            }
+
+            // Generate secure 6-digit verification code
+            int codeInt = 100000 + new java.security.SecureRandom().nextInt(900000);
+            String resetCode = String.valueOf(codeInt);
+            String tokenHash = PasswordUtil.hashPassword(resetCode);
+            long expiryMs = 15 * 60_000L; // 15 minutes
+            userDAO.createPasswordReset(email, tokenHash, expiryMs);
+
+            System.out.println("🔐 Password Reset Code for " + email + ": " + resetCode + " (Valid 15 mins)");
+
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("success", true);
+            resp.put("message", "Password reset code generated. Use the 6-digit code below to set your new password.");
+            resp.put("resetCode", resetCode); // Provided directly for immediate, device-independent recovery
+            sendJsonResponse(ex, 200, resp);
+        } catch (Exception e) {
+            sendError(ex, 400, e.getMessage());
+        }
+    }
+
+    private void handleResetPassword(HttpExchange ex) throws IOException {
+        if (!"POST".equalsIgnoreCase(ex.getRequestMethod())) {
+            sendMethodNotAllowed(ex);
+            return;
+        }
+        try {
+            JsonObject json = parseJsonBody(ex);
+            String email = json.has("email") ? json.get("email").getAsString().trim().toLowerCase() : "";
+            String code = json.has("code") ? json.get("code").getAsString().trim() : "";
+            String newPassword = json.has("newPassword") ? json.get("newPassword").getAsString() : "";
+            String confirmPassword = json.has("confirmPassword") ? json.get("confirmPassword").getAsString() : "";
+
+            if (!ValidationUtil.isValidEmail(email)) {
+                sendError(ex, 400, "Please enter a valid email address.");
+                return;
+            }
+            if (code.isEmpty()) {
+                sendError(ex, 400, "Reset code is required.");
+                return;
+            }
+            if (!ValidationUtil.isValidPassword(newPassword)) {
+                sendError(ex, 400, "Password must be at least 6 characters.");
+                return;
+            }
+            if (!newPassword.equals(confirmPassword)) {
+                sendError(ex, 400, "Passwords do not match.");
+                return;
+            }
+
+            String clientIp = getClientIp(ex);
+            if (!rateLimiter.tryAcquire("reset:" + clientIp, 5, 15 * 60_000L)) {
+                sendError(ex, 429, "Too many reset attempts. Please wait 15 minutes.");
+                return;
+            }
+
+            // Verify reset code
+            String sql = "SELECT id, token_hash FROM password_resets WHERE email = ? AND used = 0 AND expires_at > ? ORDER BY id DESC";
+            Connection conn = DBConnection.getConnection();
+            int matchedResetId = -1;
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setString(1, email);
+                ps.setTimestamp(2, new java.sql.Timestamp(System.currentTimeMillis()));
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String storedHash = rs.getString("token_hash");
+                        if (PasswordUtil.verifyPassword(code, storedHash)) {
+                            matchedResetId = rs.getInt("id");
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (matchedResetId == -1) {
+                sendError(ex, 400, "Invalid or expired reset code. Please request a new code.");
+                return;
+            }
+
+            // Mark reset code as used
+            try (PreparedStatement ps = conn.prepareStatement("UPDATE password_resets SET used = 1 WHERE id = ?")) {
+                ps.setInt(1, matchedResetId);
+                ps.executeUpdate();
+            }
+
+            User user = userDAO.findByEmail(email);
+            if (user == null) {
+                sendError(ex, 404, "User not found.");
+                return;
+            }
+
+            // Update password hash and revoke active session across all devices
+            String newHash = PasswordUtil.hashPassword(newPassword);
+            userDAO.updatePassword(user.getId(), newHash);
+            userDAO.clearSessionId(user.getId());
+            activeSessions.entrySet().removeIf(entry -> entry.getValue().getId() == user.getId());
+
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("success", true);
+            resp.put("message", "Password reset successfully! Please sign in with your new password.");
+            sendJsonResponse(ex, 200, resp);
+        } catch (Exception e) {
+            sendError(ex, 400, e.getMessage());
+        }
     }
 
     // --- Dashboard Handler ---
@@ -915,22 +1095,47 @@ public class WebServer {
         if (token != null && !token.isEmpty()) {
             User cachedUser = activeSessions.get(token);
             if (cachedUser != null) {
-                return cachedUser;
+                // Verify that cached user's session is still the active session in DB
+                try {
+                    String activeSessionId = userDAO.getCurrentSessionId(cachedUser.getId());
+                    if (activeSessionId != null && activeSessionId.equals(cachedUser.getCurrentSessionId())) {
+                        return cachedUser;
+                    } else {
+                        // Invalidate cached token if user logged in on another device or logged out
+                        activeSessions.remove(token);
+                    }
+                } catch (Exception e) {
+                    activeSessions.remove(token);
+                }
             }
-            // Recover session after server restart / Render spin-down
+            // Recover and verify session token against database
             try {
                 User verifiedUser = SessionTokenUtil.verifyToken(token, userDAO);
                 if (verifiedUser != null) {
                     activeSessions.put(token, verifiedUser);
-                    SessionManager.setCurrentUser(verifiedUser);
                     return verifiedUser;
                 }
             } catch (Exception e) {
                 System.err.println("Session token recovery error: " + e.getMessage());
             }
         }
-        // Fallback to currently logged in session in SessionManager
-        return SessionManager.getCurrentUser();
+        // Strict server authorization: DO NOT fall back to static desktop SessionManager!
+        return null;
+    }
+
+    private String getClientIp(HttpExchange ex) {
+        String xff = ex.getRequestHeaders().getFirst("X-Forwarded-For");
+        if (xff != null && !xff.isEmpty()) {
+            return xff.split(",")[0].trim();
+        }
+        String realIp = ex.getRequestHeaders().getFirst("X-Real-IP");
+        if (realIp != null && !realIp.isEmpty()) {
+            return realIp.trim();
+        }
+        if (ex.getRemoteAddress() != null && ex.getRemoteAddress().getAddress() != null) {
+            return ex.getRemoteAddress().getAddress().getHostAddress();
+        }
+        return "127.0.0.1";
     }
 
     private String getToken(HttpExchange ex) {
@@ -976,6 +1181,10 @@ public class WebServer {
         ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+        ex.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+        ex.getResponseHeaders().set("X-Frame-Options", "SAMEORIGIN");
+        ex.getResponseHeaders().set("X-XSS-Protection", "1; mode=block");
+        ex.getResponseHeaders().set("Referrer-Policy", "strict-origin-when-cross-origin");
         ex.sendResponseHeaders(statusCode, bytes.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(bytes);
@@ -1364,6 +1573,10 @@ public class WebServer {
             ex.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
             ex.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
             ex.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+            ex.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
+            ex.getResponseHeaders().set("X-Frame-Options", "SAMEORIGIN");
+            ex.getResponseHeaders().set("X-XSS-Protection", "1; mode=block");
+            ex.getResponseHeaders().set("Referrer-Policy", "strict-origin-when-cross-origin");
 
             // Cache static assets, but don't cache index.html
             if (path.endsWith(".html")) {

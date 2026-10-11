@@ -322,7 +322,24 @@ public class DBConnection {
                     "financial_mode VARCHAR(30) DEFAULT 'TRACK_ONLY', " +
                     "currency VARCHAR(10) DEFAULT '₹', " +
                     "is_active BOOLEAN " + boolDefault + ", " +
+                    "current_session_id VARCHAR(100), " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+
+            // Safe column migration for users.current_session_id on existing databases
+            try {
+                boolean hasCol = false;
+                try (ResultSet colRs = connection.getMetaData().getColumns(null, null, "users", "current_session_id")) {
+                    if (colRs.next()) hasCol = true;
+                }
+                if (!hasCol) {
+                    try (ResultSet colRs = connection.getMetaData().getColumns(null, null, "USERS", "CURRENT_SESSION_ID")) {
+                        if (colRs.next()) hasCol = true;
+                    }
+                }
+                if (!hasCol) {
+                    stmt.execute("ALTER TABLE users ADD COLUMN current_session_id VARCHAR(100)");
+                }
+            } catch (Exception ignored) {}
 
             // 2. Categories table
             stmt.execute("CREATE TABLE IF NOT EXISTS categories (" +
@@ -400,11 +417,23 @@ public class DBConnection {
                     "imported_expense_id INTEGER NULL, " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
+            // 9. Password Resets table
+            stmt.execute("CREATE TABLE IF NOT EXISTS password_resets (" +
+                    "id " + primaryKey + ", " +
+                    "email VARCHAR(150) NOT NULL, " +
+                    "token_hash VARCHAR(255) NOT NULL, " +
+                    "expires_at TIMESTAMP NOT NULL, " +
+                    "used BOOLEAN " + boolZero + ", " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+
             // Seed default categories if none exist
             seedDefaultCategories(stmt);
 
             // Seed default admin if none exist
             seedDefaultAdmin(stmt);
+
+            // Auto-migrate data from local SQLite if connected to cloud PostgreSQL/MySQL
+            DataMigrationUtil.checkAndMigrate(connection, isPostgres, isMySQL);
 
         } catch (SQLException e) {
             System.err.println("Error initializing schema: " + e.getMessage());

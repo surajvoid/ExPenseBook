@@ -54,24 +54,31 @@ public class SessionTokenUtil {
     }
 
     /**
-     * Generates a signed stateless session token for the user.
+     * Generates a signed stateless session token for the user embedding the specific sessionId.
      * Token format: <base64url_payload>.<base64url_hmac_signature>
+     * Payload format: userId:expiry:sessionId:nonce
      */
-    public static String generateToken(User user) {
+    public static String generateToken(User user, String sessionId) {
         if (user == null || user.getId() <= 0) {
             return null;
         }
         long expiry = System.currentTimeMillis() + TOKEN_VALIDITY_MS;
         String nonce = Long.toHexString(new SecureRandom().nextLong());
-        String payload = user.getId() + ":" + expiry + ":" + nonce;
+        String sid = (sessionId != null && !sessionId.isEmpty()) ? sessionId : (user.getCurrentSessionId() != null ? user.getCurrentSessionId() : "session");
+        String payload = user.getId() + ":" + expiry + ":" + sid + ":" + nonce;
         String encodedPayload = Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
         String signature = sign(encodedPayload, user.getPasswordHash());
         return encodedPayload + "." + signature;
     }
 
+    public static String generateToken(User user) {
+        return generateToken(user, user != null ? user.getCurrentSessionId() : null);
+    }
+
     /**
-     * Verifies a session token, checks expiry, and returns the User if valid.
-     * Uses constant-time comparison against user's password hash.
+     * Verifies a session token, checks expiry, validates cryptographic signature,
+     * and strictly validates that the token's sessionId matches the user's active session in the database.
+     * If the user signed in on another device, this session is rejected.
      */
     public static User verifyToken(String token, UserDAO userDAO) {
         if (token == null || !token.contains(".") || userDAO == null) {
@@ -102,9 +109,22 @@ public class SessionTokenUtil {
             }
 
             String expectedSig = sign(encodedPayload, user.getPasswordHash());
-            if (MessageDigest.isEqual(signature.getBytes(StandardCharsets.UTF_8), expectedSig.getBytes(StandardCharsets.UTF_8))) {
-                return user;
+            if (!MessageDigest.isEqual(signature.getBytes(StandardCharsets.UTF_8), expectedSig.getBytes(StandardCharsets.UTF_8))) {
+                return null;
             }
+
+            // Single Active Session Validation:
+            // If the token has a sessionId and user has an active session in the DB, they must match.
+            if (parts.length >= 3) {
+                String tokenSessionId = parts[2];
+                String activeSessionId = user.getCurrentSessionId();
+                if (activeSessionId != null && !activeSessionId.isEmpty() && !activeSessionId.equals(tokenSessionId)) {
+                    // Newer sign-in occurred on another device; invalidate this older session
+                    return null;
+                }
+            }
+
+            return user;
         } catch (Exception e) {
             // Malformed token or invalid signature
         }

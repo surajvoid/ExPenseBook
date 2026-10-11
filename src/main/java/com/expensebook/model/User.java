@@ -12,6 +12,7 @@ public class User {
     private String currency;
     private boolean active;
     private Timestamp createdAt;
+    private String currentSessionId;
 
     public User() {
         this.role = "USER";
@@ -111,5 +112,13 @@ public class User {
 
     public void setCreatedAt(Timestamp createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getCurrentSessionId() {
+        return currentSessionId;
+    }
+
+    public void setCurrentSessionId(String currentSessionId) {
+        this.currentSessionId = currentSessionId;
     }
 }

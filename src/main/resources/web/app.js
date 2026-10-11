@@ -3,6 +3,13 @@
 
 let currentUser = null;
 try {
+    // Purge any legacy plaintext credentials previously stored in localStorage
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('eb_account_')) {
+            localStorage.removeItem(k);
+        }
+    }
     const savedUser = localStorage.getItem('eb_user');
     if (savedUser) {
         currentUser = JSON.parse(savedUser);
@@ -338,78 +345,17 @@ async function apiFetch(endpoint, options = {}) {
 
     const res = await fetch(endpoint, options);
     if (res.status === 401) {
-        // Unauthorized: Check if server container was reset and auto-recover user
-        const email = getActiveUserEmail();
-        const savedAccountRaw = localStorage.getItem('eb_account_' + email);
-        if (savedAccountRaw && !window._isAutoRecoveringAuth && !endpoint.includes('/api/auth/')) {
-            window._isAutoRecoveringAuth = true;
-            try {
-                const acc = JSON.parse(savedAccountRaw);
-                console.log('Session expired or container reset. Auto-recovering session for', acc.email);
-                let recoveryToken = null;
-                // Attempt login first
-                const logResp = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: acc.email, password: acc.password })
-                });
-                if (logResp.ok) {
-                    const data = await logResp.json();
-                    if (data && data.token) {
-                        recoveryToken = data.token;
-                        currentUser = data.user;
-                    }
-                } else {
-                    // Container reset: re-register account
-                    const regResp = await fetch('/api/auth/register', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            fullName: acc.fullName || 'User',
-                            email: acc.email,
-                            password: acc.password,
-                            confirmPassword: acc.password,
-                            mode: acc.mode || 'TRACK_ONLY'
-                        })
-                    });
-                    if (regResp.ok) {
-                        const data = await regResp.json();
-                        if (data && data.token) {
-                            recoveryToken = data.token;
-                            currentUser = data.user;
-                        }
-                    }
-                }
-
-                if (recoveryToken) {
-                    currentToken = recoveryToken;
-                    localStorage.setItem('eb_token', currentToken);
-                    localStorage.setItem('eb_user', JSON.stringify(currentUser));
-                    window._isAutoRecoveringAuth = false;
-                    // Retry original call with new token
-                    options.headers = options.headers || {};
-                    options.headers['Authorization'] = `Bearer ${currentToken}`;
-                    const retryRes = await fetch(endpoint, options);
-                    if (retryRes.ok) {
-                        const ct = retryRes.headers.get('content-type');
-                        if (ct && ct.includes('application/json')) return await retryRes.json();
-                        return retryRes;
-                    }
-                }
-            } catch (recErr) {
-                console.warn('Auto-recovery in apiFetch error:', recErr);
-            }
-            window._isAutoRecoveringAuth = false;
-        }
-
-        // Unauthorized and cannot recover
+        // Multi-device session revocation or session expiration
         localStorage.removeItem('eb_token');
         localStorage.removeItem('eb_user');
         currentToken = null;
         currentUser = null;
         document.documentElement.classList.remove('user-logged-in');
         showAuthUI();
-        throw new Error('Session expired. Please sign in.');
+        if (!endpoint.includes('/api/auth/')) {
+            showToast('You were signed out because your session expired or your account was accessed from another device.', 'error');
+        }
+        throw new Error('Session expired or logged in from another device.');
     }
     if (!res.ok) {
         let errMessage = 'Request failed';
@@ -456,12 +402,16 @@ function switchAuthView(view) {
     const loginView = document.getElementById('view-login');
     const regView = document.getElementById('view-register');
     const modeView = document.getElementById('view-mode');
+    const forgotView = document.getElementById('view-forgot');
     const tabLogin = document.getElementById('tab-login');
     const tabReg = document.getElementById('tab-register');
+    const authTabs = document.getElementById('auth-tabs');
     const errBox = document.getElementById('auth-error-box');
 
     if (errBox) errBox.style.display = 'none';
     if (modeView) modeView.style.display = 'none';
+    if (forgotView) forgotView.style.display = 'none';
+    if (authTabs) authTabs.style.display = 'flex';
 
     if (view === 'login') {
         if (loginView) loginView.style.display = 'block';
@@ -476,7 +426,17 @@ function switchAuthView(view) {
     } else if (view === 'mode') {
         if (loginView) loginView.style.display = 'none';
         if (regView) regView.style.display = 'none';
+        if (authTabs) authTabs.style.display = 'none';
         if (modeView) modeView.style.display = 'block';
+    } else if (view === 'forgot') {
+        if (loginView) loginView.style.display = 'none';
+        if (regView) regView.style.display = 'none';
+        if (authTabs) authTabs.style.display = 'none';
+        if (forgotView) forgotView.style.display = 'block';
+        const s1 = document.getElementById('forgot-step-1');
+        const s2 = document.getElementById('forgot-step-2');
+        if (s1) s1.style.display = 'block';
+        if (s2) s2.style.display = 'none';
     }
 }
 
@@ -565,7 +525,7 @@ function selectPersonalizeMode(mode) {
 }
 
 async function handleLoginSubmit(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-pass').value;
     const errBox = document.getElementById('auth-error-box');
@@ -578,28 +538,17 @@ async function handleLoginSubmit(e) {
     }
 
     const normEmail = email.toLowerCase().trim();
-    const savedAccountRaw = localStorage.getItem('eb_account_' + normEmail);
-    let savedAccount = null;
-    if (savedAccountRaw) {
-        try { savedAccount = JSON.parse(savedAccountRaw); } catch (ignored) {}
-    }
 
     try {
         const resp = await apiFetch('/api/auth/login', {
             method: 'POST',
-            body: { email, password }
+            body: { email: normEmail, password }
         });
         if (resp && resp.token) {
             currentToken = resp.token;
             currentUser = resp.user;
             localStorage.setItem('eb_token', currentToken);
             localStorage.setItem('eb_user', JSON.stringify(currentUser));
-            localStorage.setItem('eb_account_' + normEmail, JSON.stringify({
-                fullName: currentUser.fullName || (savedAccount ? savedAccount.fullName : 'User'),
-                email: normEmail,
-                password: password,
-                mode: currentUser.financialMode || (savedAccount ? savedAccount.mode : 'TRACK_ONLY')
-            }));
             localStorage.setItem('eb_last_email', normEmail);
             document.documentElement.classList.add('user-logged-in');
             showToast(`Welcome back, ${currentUser.fullName || 'User'}!`, 'success');
@@ -608,37 +557,6 @@ async function handleLoginSubmit(e) {
             return;
         }
     } catch (err) {
-        // If server container reset and wiped the SQLite db, auto-recreate account seamlessly
-        if (savedAccount && savedAccount.password === password) {
-            console.log('Server container reset detected. Auto-restoring registered account:', normEmail);
-            try {
-                const regResp = await apiFetch('/api/auth/register', {
-                    method: 'POST',
-                    body: {
-                        fullName: savedAccount.fullName || 'User',
-                        email: normEmail,
-                        password: password,
-                        confirmPassword: password,
-                        mode: savedAccount.mode || 'TRACK_ONLY'
-                    }
-                });
-                if (regResp && regResp.token) {
-                    currentToken = regResp.token;
-                    currentUser = regResp.user;
-                    localStorage.setItem('eb_token', currentToken);
-                    localStorage.setItem('eb_user', JSON.stringify(currentUser));
-                    localStorage.setItem('eb_last_email', normEmail);
-                    document.documentElement.classList.add('user-logged-in');
-                    showToast(`Welcome back, ${currentUser.fullName || 'User'}!`, 'success');
-                    showAppUI();
-                    syncExpensesWithServer();
-                    return;
-                }
-            } catch (regErr) {
-                console.warn('Auto re-registration attempt failed:', regErr);
-            }
-        }
-
         if (errBox) {
             errBox.textContent = err.message || 'Invalid email or password.';
             errBox.style.display = 'flex';
@@ -703,12 +621,6 @@ async function finalizePersonalization() {
             localStorage.setItem('eb_token', currentToken);
             localStorage.setItem('eb_user', JSON.stringify(currentUser));
             const normEmail = pendingRegisterData.email.toLowerCase().trim();
-            localStorage.setItem('eb_account_' + normEmail, JSON.stringify({
-                fullName: pendingRegisterData.fullName,
-                email: normEmail,
-                password: pendingRegisterData.password,
-                mode: mode
-            }));
             localStorage.setItem('eb_last_email', normEmail);
             document.documentElement.classList.add('user-logged-in');
             showToast('Account created successfully! Welcome to ExPense Book.', 'success');
@@ -721,6 +633,110 @@ async function finalizePersonalization() {
             errBox.style.display = 'flex';
         }
         switchAuthView('register');
+    }
+}
+
+let pendingResetEmail = '';
+
+async function handleForgotPasswordSubmit(e) {
+    if (e) e.preventDefault();
+    const emailInput = document.getElementById('forgot-email');
+    const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+    const errBox = document.getElementById('auth-error-box');
+    const btn = document.getElementById('btn-forgot-request');
+
+    if (!email) return;
+    if (errBox) errBox.style.display = 'none';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Generating Code...';
+    }
+
+    try {
+        const resp = await apiFetch('/api/auth/forgot-password', {
+            method: 'POST',
+            body: { email }
+        });
+
+        pendingResetEmail = email;
+        const s1 = document.getElementById('forgot-step-1');
+        const s2 = document.getElementById('forgot-step-2');
+        if (s1) s1.style.display = 'none';
+        if (s2) s2.style.display = 'block';
+
+        if (resp && resp.resetCode) {
+            const codeInput = document.getElementById('reset-code');
+            if (codeInput) codeInput.value = resp.resetCode;
+            showToast(`Reset code generated: ${resp.resetCode}`, 'info');
+        } else {
+            showToast(resp.message || 'Verification code sent.', 'info');
+        }
+    } catch (err) {
+        if (errBox) {
+            errBox.textContent = err.message || 'Failed to request reset code.';
+            errBox.style.display = 'flex';
+        } else {
+            showToast(err.message || 'Failed to request reset code.', 'error');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Get Reset Code →';
+        }
+    }
+}
+
+async function handleResetPasswordSubmit(e) {
+    if (e) e.preventDefault();
+    const code = document.getElementById('reset-code').value.trim();
+    const newPass = document.getElementById('reset-new-pass').value;
+    const confPass = document.getElementById('reset-conf-pass').value;
+    const errBox = document.getElementById('auth-error-box');
+    const btn = document.getElementById('btn-reset-submit');
+
+    if (newPass !== confPass) {
+        if (errBox) {
+            errBox.textContent = 'New passwords do not match.';
+            errBox.style.display = 'flex';
+        }
+        return;
+    }
+
+    if (errBox) errBox.style.display = 'none';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Updating Password...';
+    }
+
+    try {
+        const resp = await apiFetch('/api/auth/reset-password', {
+            method: 'POST',
+            body: {
+                email: pendingResetEmail,
+                code: code,
+                newPassword: newPass,
+                confirmPassword: confPass
+            }
+        });
+
+        showToast(resp.message || 'Password reset successfully! Please sign in.', 'success');
+        switchAuthView('login');
+        const loginPass = document.getElementById('login-pass');
+        if (loginPass) loginPass.value = '';
+        const loginEmail = document.getElementById('login-email');
+        if (loginEmail && pendingResetEmail) loginEmail.value = pendingResetEmail;
+    } catch (err) {
+        if (errBox) {
+            errBox.textContent = err.message || 'Failed to reset password.';
+            errBox.style.display = 'flex';
+        } else {
+            showToast(err.message || 'Failed to reset password.', 'error');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Reset Password →';
+        }
     }
 }
 

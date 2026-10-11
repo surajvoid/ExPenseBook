@@ -47,12 +47,25 @@ public class GeminiAiService {
     private final IncomeService incomeService = new IncomeService();
     private final AnalysisService analysisService = new AnalysisService();
 
-    private final HttpClient httpClient;
+    private HttpClient httpClient;
 
     public GeminiAiService() {
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(15))
-                .build();
+        try {
+            this.httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(15))
+                    .build();
+        } catch (Exception e) {
+            this.httpClient = null;
+        }
+    }
+
+    private synchronized HttpClient getHttpClient() {
+        if (this.httpClient == null) {
+            this.httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(15))
+                    .build();
+        }
+        return this.httpClient;
     }
 
     public static class ChatMessage {
@@ -211,7 +224,7 @@ public class GeminiAiService {
                         .GET()
                         .build();
 
-                HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                HttpResponse<String> resp = getHttpClient().send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
                 if (resp.statusCode() == 200) {
                     JsonObject root = JsonParser.parseString(resp.body()).getAsJsonObject();
                     if (root.has("models") && root.get("models").isJsonArray()) {
@@ -365,7 +378,7 @@ public class GeminiAiService {
                 .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        HttpResponse<String> response = getHttpClient().send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         if (response.statusCode() != 200) {
             String errDetail = response.body();
