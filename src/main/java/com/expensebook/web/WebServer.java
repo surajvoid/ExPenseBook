@@ -145,10 +145,11 @@ public class WebServer {
         }
         try {
             JsonObject json = parseJsonBody(ex);
-            String name = json.get("fullName").getAsString();
-            String email = json.get("email").getAsString().trim().toLowerCase();
-            String password = json.get("password").getAsString();
-            String confirmPassword = json.get("confirmPassword").getAsString();
+            String name = json.has("fullName") ? json.get("fullName").getAsString() :
+                    (json.has("name") ? json.get("name").getAsString() : "");
+            String email = json.has("email") ? json.get("email").getAsString().trim().toLowerCase() : "";
+            String password = json.has("password") ? json.get("password").getAsString() : "";
+            String confirmPassword = json.has("confirmPassword") ? json.get("confirmPassword").getAsString() : password;
             String modeStr = json.has("mode") ? json.get("mode").getAsString() : "TRACK_ONLY";
             FinancialMode mode = FinancialMode.fromString(modeStr);
 
@@ -217,8 +218,16 @@ public class WebServer {
             resp.put("token", token);
             resp.put("user", user);
             sendJsonResponse(ex, 200, resp);
+        } catch (IllegalArgumentException e) {
+            int code = e.getMessage() != null && e.getMessage().contains("No account found") ? 404 : 401;
+            sendError(ex, code, e.getMessage());
+        } catch (IllegalStateException e) {
+            sendError(ex, 403, e.getMessage());
+        } catch (SQLException e) {
+            System.err.println("Database error during login: " + e.getMessage());
+            sendError(ex, 503, "Database connection error. Please try again shortly.");
         } catch (Exception e) {
-            sendError(ex, 400, e.getMessage());
+            sendError(ex, 400, e.getMessage() != null ? e.getMessage() : "Login failed.");
         }
     }
 
@@ -930,7 +939,7 @@ public class WebServer {
                 resp.put("activeUsers", userService.getActiveUsers());
                 resp.put("systemCategoriesCount", categoryService.getSystemDefaultCategories().size());
                 resp.put("dbStatus", DBConnection.getDatabaseStatusText());
-                resp.put("users", userService.listAllUsers());
+                resp.put("users", userService.listAllUsersWithStats());
                 resp.put("categories", categoryService.getSystemDefaultCategories());
 
                 String activeKey = geminiAiService.resolveApiKey(null);
@@ -945,12 +954,43 @@ public class WebServer {
                 if ("toggleStatus".equals(action)) {
                     int targetId = json.get("userId").getAsInt();
                     boolean active = json.get("active").getAsBoolean();
+                    if (targetId == user.getId()) {
+                        throw new IllegalArgumentException("You cannot toggle the active status of your own administrator account.");
+                    }
                     userService.toggleUserStatus(targetId, active);
+                    System.out.printf("[AUDIT] Admin (ID: %d, Email: %s) toggled status of user ID %d to active=%b%n",
+                            user.getId(), user.getEmail(), targetId, active);
                     sendJsonResponse(ex, 200, Map.of("success", true));
                 } else if ("deleteUser".equals(action)) {
                     int targetId = json.get("userId").getAsInt();
+                    if (targetId == user.getId()) {
+                        throw new IllegalArgumentException("You cannot delete your own administrator account.");
+                    }
                     userService.deleteUser(targetId);
+                    System.out.printf("[AUDIT] Admin (ID: %d, Email: %s) deleted user ID %d%n",
+                            user.getId(), user.getEmail(), targetId);
                     sendJsonResponse(ex, 200, Map.of("success", true));
+                } else if ("editUser".equals(action)) {
+                    int targetId = json.get("userId").getAsInt();
+                    String name = (json.has("fullName") ? json.get("fullName").getAsString() :
+                            (json.has("name") ? json.get("name").getAsString() : "")).trim();
+                    String email = json.get("email").getAsString().trim().toLowerCase();
+                    String role = json.has("role") ? json.get("role").getAsString().trim().toUpperCase() : "USER";
+                    String modeStr = json.has("financialMode") ? json.get("financialMode").getAsString().trim().toUpperCase() :
+                            (json.has("mode") ? json.get("mode").getAsString().trim().toUpperCase() : "TRACK_ONLY");
+                    boolean active = json.has("active") ? json.get("active").getAsBoolean() : true;
+
+                    if (targetId == user.getId() && !"ADMIN".equals(role)) {
+                        throw new IllegalArgumentException("You cannot demote your own administrator account.");
+                    }
+                    if (targetId == user.getId() && !active) {
+                        throw new IllegalArgumentException("You cannot deactivate your own administrator account.");
+                    }
+
+                    userService.adminUpdateUser(targetId, name, email, role, FinancialMode.fromString(modeStr), active);
+                    System.out.printf("[AUDIT] Admin (ID: %d, Email: %s) edited user ID %d: Name='%s', Email='%s', Role='%s', Active=%b%n",
+                            user.getId(), user.getEmail(), targetId, name, email, role, active);
+                    sendJsonResponse(ex, 200, Map.of("success", true, "message", "User account updated successfully."));
                 } else if ("saveAiKey".equals(action)) {
                     String apiKey = json.has("apiKey") && !json.get("apiKey").isJsonNull() ? json.get("apiKey").getAsString().trim() : "";
                     saveGeminiApiKey(apiKey);
@@ -1051,6 +1091,11 @@ public class WebServer {
     // --- Database Configuration Handler ---
 
     private void handleDatabase(HttpExchange ex) throws IOException {
+        User user = authenticate(ex);
+        if (user == null || !user.isAdmin()) {
+            sendError(ex, 403, "Access denied. Administrator privileges required.");
+            return;
+        }
         String method = ex.getRequestMethod().toUpperCase();
         try {
             if ("GET".equals(method)) {
@@ -1066,14 +1111,14 @@ public class WebServer {
                 String host = json.has("host") ? json.get("host").getAsString() : "localhost";
                 int port = json.has("port") ? json.get("port").getAsInt() : 3306;
                 String database = json.has("database") ? json.get("database").getAsString() : "expensebook";
-                String user = json.has("user") ? json.get("user").getAsString() : "root";
+                String dbUser = json.has("user") ? json.get("user").getAsString() : "root";
                 String password = json.has("password") ? json.get("password").getAsString() : "";
 
                 if ("test".equals(action)) {
-                    boolean ok = DBConnection.testConnection(host, port, database, user, password);
+                    boolean ok = DBConnection.testConnection(host, port, database, dbUser, password);
                     sendJsonResponse(ex, 200, Map.of("success", true, "connected", ok));
                 } else if ("save".equals(action)) {
-                    DBConnection.saveProperties(dbType, host, port, database, user, password);
+                    DBConnection.saveProperties(dbType, host, port, database, dbUser, password);
                     DBConnection.getConnection(); // Refresh
                     sendJsonResponse(ex, 200, Map.of(
                             "success", true,

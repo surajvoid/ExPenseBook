@@ -45,7 +45,7 @@ public class DataMigrationUtil {
                 Map<Integer, Integer> userIdMap = new HashMap<>();
 
                 // 1. Sync & Map Users
-                String findUserSql = "SELECT id FROM users WHERE LOWER(email) = LOWER(?)";
+                String findUserSql = "SELECT id, password_hash FROM users WHERE LOWER(TRIM(email)) = LOWER(TRIM(?))";
                 String insertUserSql = "INSERT INTO users (full_name, email, password_hash, role, financial_mode, currency, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
                 try (Statement srcSt = srcConn.createStatement();
@@ -65,6 +65,19 @@ public class DataMigrationUtil {
                                 // User already exists in target DB
                                 int destId = destRs.getInt("id");
                                 userIdMap.put(srcId, destId);
+
+                                String destHash = destRs.getString("password_hash");
+                                String srcHash = srcRs.getString("password_hash");
+                                boolean isCorrupted = destHash == null || !destHash.startsWith("$2");
+                                boolean isAdminSync = "admin@expensebook.com".equalsIgnoreCase(email) && srcHash != null && srcHash.startsWith("$2");
+                                if (isCorrupted || isAdminSync) {
+                                    try (PreparedStatement updatePs = targetConn.prepareStatement("UPDATE users SET password_hash = ? WHERE id = ?")) {
+                                        updatePs.setString(1, srcHash);
+                                        updatePs.setInt(2, destId);
+                                        updatePs.executeUpdate();
+                                        System.out.println("   Synchronized/repaired password hash for: " + email);
+                                    }
+                                }
                             } else {
                                 // Insert missing user into target DB
                                 insertPs.setString(1, srcRs.getString("full_name"));

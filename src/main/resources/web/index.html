@@ -1034,21 +1034,44 @@
                     </div>
 
                     <div class="card">
-                        <h3>Registered Users Directory</h3>
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Full Name</th>
-                                    <th>Email</th>
-                                    <th>Role</th>
-                                    <th>Mode</th>
-                                    <th>Status</th>
-                                    <th style="text-align: right;">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="admin-users-table"></tbody>
-                        </table>
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+                            <div>
+                                <h3 style="margin: 0;">Registered Users Directory</h3>
+                                <p class="text-muted" style="margin: 2px 0 0; font-size: 0.8rem;">Live centralized database records of all registered application users.</p>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <input type="text" id="admin-user-search" class="form-input" placeholder="🔍 Search name or email..." style="width: 190px; padding: 7px 12px; font-size: 0.85rem;" oninput="filterAdminUsers()">
+                                <select id="admin-user-filter-role" class="form-select" style="width: 110px; padding: 7px 10px; font-size: 0.85rem;" onchange="filterAdminUsers()">
+                                    <option value="ALL">All Roles</option>
+                                    <option value="USER">User</option>
+                                    <option value="ADMIN">Admin</option>
+                                </select>
+                                <select id="admin-user-filter-status" class="form-select" style="width: 120px; padding: 7px 10px; font-size: 0.85rem;" onchange="filterAdminUsers()">
+                                    <option value="ALL">All Status</option>
+                                    <option value="ACTIVE">Active</option>
+                                    <option value="SUSPENDED">Suspended</option>
+                                </select>
+                                <button class="btn btn-secondary btn-small" onclick="loadAdminView()" title="Refresh Users from Backend Database">🔄 Refresh</button>
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Full Name</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Mode</th>
+                                        <th>Status</th>
+                                        <th>Registered</th>
+                                        <th>Expenses</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-users-table"></tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <!-- Database Engine & Connectivity (Admin Only) -->
@@ -1294,6 +1317,62 @@
                         <button type="button" class="btn btn-secondary modal-btn-cancel" onclick="closeExpenseModal()">Cancel</button>
                         <button type="submit" class="btn btn-primary modal-btn-save" id="modal-btn-submit">
                             <span>✓</span> Save Expense
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal: Admin Edit User -->
+        <div id="modal-admin-edit-user" class="modal-backdrop" style="display: none;">
+            <div class="modal-content" style="max-width: 480px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="margin: 0;">✏️ Edit User Account (Admin)</h3>
+                    <button type="button" onclick="closeAdminEditUserModal()"
+                        style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" aria-label="Close">✕</button>
+                </div>
+                <form onsubmit="handleAdminSaveUser(event)">
+                    <input type="hidden" id="edit-user-id">
+                    <div class="form-group">
+                        <label class="form-label">User ID</label>
+                        <input type="text" id="edit-user-id-display" class="form-input" disabled style="background: #F0F4F2; font-weight: 700;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Full Name</label>
+                        <input type="text" id="edit-user-name" class="form-input" required placeholder="User's full name">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Registered Email</label>
+                        <input type="email" id="edit-user-email" class="form-input" required placeholder="name@example.com">
+                    </div>
+                    <div class="form-row-2">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Role</label>
+                            <select id="edit-user-role" class="form-select">
+                                <option value="USER">USER</option>
+                                <option value="ADMIN">ADMIN</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Financial Mode</label>
+                            <select id="edit-user-mode" class="form-select">
+                                <option value="TRACK_ONLY">Track Only</option>
+                                <option value="TRACK_AND_BUDGET">Track + Budget</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: 14px;">
+                        <label class="form-label">Account Status</label>
+                        <select id="edit-user-status" class="form-select">
+                            <option value="true">Active (Access Granted)</option>
+                            <option value="false">Suspended (Access Deactivated)</option>
+                        </select>
+                    </div>
+                    <div id="admin-edit-err" class="badge badge-coral" style="display: none; width: 100%; margin-bottom: 12px; padding: 10px;"></div>
+                    <div class="modal-actions-bar">
+                        <button type="button" class="btn btn-secondary modal-btn-cancel" onclick="closeAdminEditUserModal()">Cancel</button>
+                        <button type="submit" id="btn-save-admin-edit" class="btn btn-primary modal-btn-save">
+                            <span>✓</span> Save Changes
                         </button>
                     </div>
                 </form>

@@ -130,7 +130,17 @@ public class DBConnection {
     public static synchronized Connection getConnection() {
         try {
             if (connection != null && !connection.isClosed()) {
-                return connection;
+                try {
+                    if (connection.isValid(2)) {
+                        return connection;
+                    }
+                } catch (Exception ignored) {
+                    // Stale or dropped socket; close and re-establish connection
+                }
+                try {
+                    connection.close();
+                } catch (Exception ignored) {}
+                connection = null;
             }
 
             String dbType = config.getProperty("db.type", "mysql").toLowerCase();
@@ -147,7 +157,7 @@ public class DBConnection {
                     boolean ssl = Boolean.parseBoolean(config.getProperty("db.ssl", "true"));
 
                     String url = String.format("jdbc:postgresql://%s:%s/%s%s",
-                            host, port, database, ssl ? "?sslmode=require" : "");
+                            host, port, database, ssl ? "?sslmode=require&tcpKeepAlive=true" : "?tcpKeepAlive=true");
 
                     connection = DriverManager.getConnection(url, user, password);
                     isMySQL = false;
@@ -173,7 +183,7 @@ public class DBConnection {
                     boolean ssl = Boolean.parseBoolean(config.getProperty("db.ssl", "false"));
 
                     String url = String.format(
-                            "jdbc:mysql://%s:%s/%s?createDatabaseIfNotExist=true&useSSL=%s&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+                            "jdbc:mysql://%s:%s/%s?createDatabaseIfNotExist=true&useSSL=%s&allowPublicKeyRetrieval=true&serverTimezone=UTC&autoReconnect=true&tcpKeepAlive=true",
                             host, port, database, ssl ? "true" : "false");
 
                     connection = DriverManager.getConnection(url, user, password);

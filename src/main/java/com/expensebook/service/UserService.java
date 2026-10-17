@@ -9,6 +9,7 @@ import com.expensebook.util.ValidationUtil;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 
 public class UserService {
 
@@ -55,15 +56,15 @@ public class UserService {
 
         User user = userDAO.findByEmail(email);
         if (user == null) {
-            throw new IllegalArgumentException("No account found with this email.");
+            throw new IllegalArgumentException("No account found with this email. Please check your spelling or register a new account.");
         }
 
         if (!user.isActive()) {
-            throw new IllegalStateException("Your account has been deactivated. Please contact admin.");
+            throw new IllegalStateException("Your account has been deactivated. Please contact an administrator.");
         }
 
         if (!PasswordUtil.verifyPassword(password, user.getPasswordHash())) {
-            throw new IllegalArgumentException("Invalid password. Please check your credentials.");
+            throw new IllegalArgumentException("Incorrect password. Please verify your credentials or use Forgot Password.");
         }
 
         SessionManager.setCurrentUser(user);
@@ -116,6 +117,23 @@ public class UserService {
 
     public List<User> listAllUsers() throws SQLException {
         return userDAO.getAllUsers();
+    }
+
+    public List<Map<String, Object>> listAllUsersWithStats() throws SQLException {
+        return userDAO.getAllUsersWithStats();
+    }
+
+    public boolean adminUpdateUser(int targetUserId, String fullName, String email, String role, FinancialMode mode, boolean active) throws SQLException {
+        if (fullName == null || fullName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Full name cannot be empty.");
+        }
+        if (!ValidationUtil.isValidEmail(email)) {
+            throw new IllegalArgumentException("Please enter a valid email address.");
+        }
+        if (!"USER".equalsIgnoreCase(role) && !"ADMIN".equalsIgnoreCase(role)) {
+            throw new IllegalArgumentException("Invalid role: must be USER or ADMIN.");
+        }
+        return userDAO.adminUpdateUser(targetUserId, fullName, email, role, mode, active);
     }
 
     public boolean toggleUserStatus(int userId, boolean active) throws SQLException {

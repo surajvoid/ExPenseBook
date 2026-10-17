@@ -740,15 +740,6 @@ async function handleResetPasswordSubmit(e) {
     }
 }
 
-function fillAdminCredentials() {
-    switchAuthView('login');
-    const emailEl = document.getElementById('login-email');
-    const passEl = document.getElementById('login-pass');
-    if (emailEl) emailEl.value = 'admin@expensebook.com';
-    if (passEl) passEl.value = 'SURAJ@260203';
-    showToast('Admin credentials filled!', 'info');
-}
-
 async function handleLogout() {
     if (!confirm('Are you sure you want to sign out?')) return;
     try {
@@ -2520,48 +2511,185 @@ async function handleSaveDatabaseConfig(e) {
 }
 
 // --- Admin Governance View ---
+let allAdminUsers = [];
+
 async function loadAdminView() {
     loadDatabaseSettings();
     loadAdminAiSettings();
+    const tbody = document.getElementById('admin-users-table');
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 24px; color: var(--text-muted);">🔄 Loading registered users from central database...</td></tr>';
+    }
     try {
         const data = await apiFetch('/api/admin');
         document.getElementById('admin-total-users').textContent = data.totalUsers;
         document.getElementById('admin-active-users').textContent = data.activeUsers;
         document.getElementById('admin-total-cats').textContent = data.systemCategoriesCount;
 
-        const tbody = document.getElementById('admin-users-table');
-        tbody.innerHTML = '';
-
-        if (data.users && data.users.length > 0) {
-            data.users.forEach(u => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>#${u.id}</td>
-                    <td style="font-weight: 700;">${escapeHtml(u.fullName)}</td>
-                    <td>${escapeHtml(u.email)}</td>
-                    <td><span class="badge ${u.role === 'ADMIN' ? 'badge-peach' : 'badge-sage'}">${u.role}</span></td>
-                    <td><span class="badge badge-blue">${u.financialMode}</span></td>
-                    <td>
-                        <span class="badge ${u.isActive ? 'badge-sage' : 'badge-coral'}">
-                            ${u.isActive ? 'Active' : 'Suspended'}
-                        </span>
-                    </td>
-                    <td style="text-align: right;">
-                        ${u.role !== 'ADMIN' ? `
-                            <button class="btn btn-secondary btn-small" onclick="toggleUserStatus(${u.id}, ${!u.isActive})">
-                                ${u.isActive ? 'Suspend' : 'Activate'}
-                            </button>
-                            <button class="btn btn-danger btn-small" onclick="deleteUserAccount(${u.id})" style="margin-left: 4px;">
-                                Delete
-                            </button>
-                        ` : '<span class="text-muted" style="font-size: 0.8rem;">Superuser</span>'}
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
+        allAdminUsers = Array.isArray(data.users) ? data.users : [];
+        filterAdminUsers();
     } catch (e) {
         console.error('Error loading admin view:', e);
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; padding: 24px; color: #E88C8C;">❌ Failed to load users from database: ${escapeHtml(e.message)}<br><button class="btn btn-secondary btn-small" style="margin-top: 10px;" onclick="loadAdminView()">Retry</button></td></tr>`;
+        }
+    }
+}
+
+function filterAdminUsers() {
+    const searchInput = document.getElementById('admin-user-search');
+    const roleSelect = document.getElementById('admin-user-filter-role');
+    const statusSelect = document.getElementById('admin-user-filter-status');
+
+    const search = searchInput ? searchInput.value.trim().toLowerCase() : '';
+    const role = roleSelect ? roleSelect.value : 'ALL';
+    const status = statusSelect ? statusSelect.value : 'ALL';
+
+    const filtered = allAdminUsers.filter(u => {
+        const nameMatch = !search || (u.fullName && u.fullName.toLowerCase().includes(search)) || (u.email && u.email.toLowerCase().includes(search));
+        const roleMatch = role === 'ALL' || u.role === role;
+        const isActive = u.active !== undefined ? Boolean(u.active) : (u.isActive !== undefined ? Boolean(u.isActive) : true);
+        const statusMatch = status === 'ALL' || (status === 'ACTIVE' && isActive) || (status === 'SUSPENDED' && !isActive);
+        return nameMatch && roleMatch && statusMatch;
+    });
+
+    renderAdminUsersTable(filtered);
+}
+
+function renderAdminUsersTable(users) {
+    const tbody = document.getElementById('admin-users-table');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 28px; color: var(--text-muted); font-size: 0.9rem;">No registered users found matching the selected criteria.</td></tr>';
+        return;
+    }
+
+    users.forEach(u => {
+        const isActive = u.active !== undefined ? Boolean(u.active) : (u.isActive !== undefined ? Boolean(u.isActive) : true);
+        let dateDisplay = '—';
+        if (u.createdAt) {
+            try {
+                const d = new Date(u.createdAt);
+                if (!isNaN(d.getTime())) {
+                    dateDisplay = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                } else {
+                    dateDisplay = String(u.createdAt).substring(0, 10);
+                }
+            } catch (ignored) {
+                dateDisplay = String(u.createdAt).substring(0, 10);
+            }
+        }
+        const curr = u.currency || '₹';
+        const statsDisplay = `${u.expenseCount || 0} exp (${curr}${Math.round(u.totalSpent || 0).toLocaleString()})`;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight: 700;">#${u.id}</td>
+            <td style="font-weight: 700;">${escapeHtml(u.fullName)}</td>
+            <td>${escapeHtml(u.email)}</td>
+            <td><span class="badge ${u.role === 'ADMIN' ? 'badge-peach' : 'badge-sage'}">${u.role || 'USER'}</span></td>
+            <td><span class="badge badge-blue">${u.financialMode === 'TRACK_AND_BUDGET' ? 'Track + Budget' : 'Track Only'}</span></td>
+            <td>
+                <span class="badge ${isActive ? 'badge-sage' : 'badge-coral'}">
+                    ${isActive ? 'Active' : 'Suspended'}
+                </span>
+                ${u.hasActiveSession ? '<span class="badge badge-blue" style="font-size: 0.62rem; padding: 1px 5px; margin-left: 2px;">Online</span>' : ''}
+            </td>
+            <td style="font-size: 0.82rem; color: var(--text-muted);">${dateDisplay}</td>
+            <td style="font-size: 0.82rem; font-weight: 600;">${statsDisplay}</td>
+            <td style="text-align: right;">
+                <div style="display: flex; gap: 4px; justify-content: flex-end; align-items: center;">
+                    <button class="btn btn-secondary btn-small" onclick="openAdminEditUserModal(${u.id})" title="Edit user profile">
+                        ✏️ Edit
+                    </button>
+                    ${u.role !== 'ADMIN' ? `
+                        <button class="btn btn-secondary btn-small" onclick="toggleUserStatus(${u.id}, ${!isActive})">
+                            ${isActive ? 'Suspend' : 'Activate'}
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="deleteUserAccount(${u.id})" style="margin-left: 2px;">
+                            Delete
+                        </button>
+                    ` : '<span class="text-muted" style="font-size: 0.78rem; font-weight: 600; margin-left: 4px;">Superuser</span>'}
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function openAdminEditUserModal(userId) {
+    const user = allAdminUsers.find(u => u.id === userId);
+    if (!user) return;
+
+    document.getElementById('edit-user-id').value = user.id;
+    document.getElementById('edit-user-id-display').value = '#' + user.id;
+    document.getElementById('edit-user-name').value = user.fullName || '';
+    document.getElementById('edit-user-email').value = user.email || '';
+    document.getElementById('edit-user-role').value = user.role || 'USER';
+    document.getElementById('edit-user-mode').value = user.financialMode || 'TRACK_ONLY';
+    const isActive = user.active !== undefined ? Boolean(user.active) : (user.isActive !== undefined ? Boolean(user.isActive) : true);
+    document.getElementById('edit-user-status').value = isActive ? 'true' : 'false';
+
+    const errBox = document.getElementById('admin-edit-err');
+    if (errBox) errBox.style.display = 'none';
+
+    const modal = document.getElementById('modal-admin-edit-user');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeAdminEditUserModal() {
+    const modal = document.getElementById('modal-admin-edit-user');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleAdminSaveUser(e) {
+    if (e) e.preventDefault();
+    const userId = parseInt(document.getElementById('edit-user-id').value);
+    const fullName = document.getElementById('edit-user-name').value.trim();
+    const email = document.getElementById('edit-user-email').value.trim();
+    const role = document.getElementById('edit-user-role').value;
+    const financialMode = document.getElementById('edit-user-mode').value;
+    const active = document.getElementById('edit-user-status').value === 'true';
+
+    const errBox = document.getElementById('admin-edit-err');
+    const btn = document.getElementById('btn-save-admin-edit');
+    if (errBox) errBox.style.display = 'none';
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+    }
+
+    try {
+        const resp = await apiFetch('/api/admin', {
+            method: 'POST',
+            body: {
+                action: 'editUser',
+                userId,
+                fullName,
+                email,
+                role,
+                financialMode,
+                active
+            }
+        });
+        showToast('User account updated successfully!', 'success');
+        closeAdminEditUserModal();
+        loadAdminView();
+    } catch (err) {
+        if (errBox) {
+            errBox.textContent = err.message || 'Failed to update user.';
+            errBox.style.display = 'block';
+        } else {
+            showToast(err.message || 'Failed to update user.', 'error');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span>✓</span> Save Changes';
+        }
     }
 }
 
@@ -2571,6 +2699,7 @@ async function toggleUserStatus(userId, active) {
             method: 'POST',
             body: { action: 'toggleStatus', userId, active }
         });
+        showToast(`User status set to ${active ? 'Active' : 'Suspended'}`, 'success');
         loadAdminView();
     } catch (err) {
         alert('Failed to update user status: ' + err.message);
@@ -2578,12 +2707,13 @@ async function toggleUserStatus(userId, active) {
 }
 
 async function deleteUserAccount(userId) {
-    if (!confirm('Are you sure you want to delete this user? Their account will be permanently deactivated.')) return;
+    if (!confirm('Are you sure you want to delete this user? Their account and associated data will be permanently removed.')) return;
     try {
         await apiFetch('/api/admin', {
             method: 'POST',
             body: { action: 'deleteUser', userId }
         });
+        showToast('User deleted successfully.', 'info');
         loadAdminView();
     } catch (err) {
         alert('Failed to delete user: ' + err.message);
