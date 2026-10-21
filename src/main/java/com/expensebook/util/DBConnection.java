@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -436,11 +437,25 @@ public class DBConnection {
                     "used BOOLEAN " + boolZero + ", " +
                     "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
 
+            // 10. Savings Goals table (For Images 3, 4, 5)
+            stmt.execute("CREATE TABLE IF NOT EXISTS savings_goals (" +
+                    "id " + primaryKey + ", " +
+                    "user_id INTEGER NOT NULL, " +
+                    "title VARCHAR(100) NOT NULL, " +
+                    "target_amount DECIMAL(12,2) NOT NULL, " +
+                    "saved_amount DECIMAL(12,2) DEFAULT 0.00, " +
+                    "emoji VARCHAR(20) DEFAULT '🎯', " +
+                    "color_theme VARCHAR(30) DEFAULT 'green', " +
+                    "target_date DATE NULL, " +
+                    "status VARCHAR(30) DEFAULT 'ACTIVE', " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+
             // Seed default categories if none exist
             seedDefaultCategories(stmt);
 
-            // Seed default admin if none exist
-            seedDefaultAdmin(stmt);
+            // Seed default users and sample goals
+            seedDefaultUsers(stmt);
 
             // Auto-migrate data from local SQLite if connected to cloud PostgreSQL/MySQL
             DataMigrationUtil.checkAndMigrate(connection, isPostgres, isMySQL);
@@ -488,23 +503,82 @@ public class DBConnection {
         }
     }
 
-    private static void seedDefaultAdmin(Statement stmt) {
+    private static void seedDefaultUsers(Statement stmt) {
         try {
-            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM users WHERE email = 'admin@expensebook.com'");
-            if (rs.next() && rs.getInt(1) == 0) {
-                // admin password: Admin@123
-                String adminHash = "$2a$10$7ZzWd6k5oK.vY0vQ8tL5w.rXb4A5uQ9/sYj9mC4.n5L8W3L.c9M9e"; // or generate dynamically
-                // We'll insert with PasswordUtil hash
-                String hash = PasswordUtil.hashPassword("Admin@123");
+            // 1. Seed or repair admin@expensebook.com (Admin@123)
+            String adminHash = PasswordUtil.hashPassword("Admin@123");
+            ResultSet rsAdmin = stmt.executeQuery("SELECT id FROM users WHERE LOWER(TRIM(email)) = 'admin@expensebook.com'");
+            if (rsAdmin.next()) {
+                int adminId = rsAdmin.getInt("id");
+                try (PreparedStatement ps = stmt.getConnection().prepareStatement("UPDATE users SET password_hash = ? WHERE id = ?")) {
+                    ps.setString(1, adminHash);
+                    ps.setInt(2, adminId);
+                    ps.executeUpdate();
+                }
+            } else {
                 stmt.executeUpdate(String.format(
                         "INSERT INTO users (full_name, email, password_hash, role, financial_mode, currency, is_active) " +
                                 "VALUES ('System Admin', 'admin@expensebook.com', '%s', 'ADMIN', 'TRACK_AND_BUDGET', '₹', TRUE)",
-                        hash
+                        adminHash
                 ));
                 System.out.println(" Seeded default administrator account: admin@expensebook.com (Pass: Admin@123)");
             }
+
+            // 2. Seed or repair surajjaiswal566sj@gmail.com (suraj123)
+            String surajHash = PasswordUtil.hashPassword("suraj123");
+            ResultSet rsSuraj = stmt.executeQuery("SELECT id FROM users WHERE LOWER(TRIM(email)) = 'surajjaiswal566sj@gmail.com'");
+            int surajUserId;
+            if (rsSuraj.next()) {
+                surajUserId = rsSuraj.getInt("id");
+                try (PreparedStatement ps = stmt.getConnection().prepareStatement("UPDATE users SET password_hash = ? WHERE id = ?")) {
+                    ps.setString(1, surajHash);
+                    ps.setInt(2, surajUserId);
+                    ps.executeUpdate();
+                }
+            } else {
+                stmt.executeUpdate(String.format(
+                        "INSERT INTO users (full_name, email, password_hash, role, financial_mode, currency, is_active) " +
+                                "VALUES ('Suraj Jaiswal', 'surajjaiswal566sj@gmail.com', '%s', 'USER', 'TRACK_AND_BUDGET', '₹', TRUE)",
+                        surajHash
+                ));
+                ResultSet rsNew = stmt.executeQuery("SELECT id FROM users WHERE LOWER(TRIM(email)) = 'surajjaiswal566sj@gmail.com'");
+                surajUserId = rsNew.next() ? rsNew.getInt("id") : 1;
+                System.out.println(" Seeded user account: surajjaiswal566sj@gmail.com (Pass: suraj123)");
+            }
+
+            // 3. Seed or repair sky2602@gmail.com (suraj123)
+            ResultSet rsSky = stmt.executeQuery("SELECT id FROM users WHERE LOWER(TRIM(email)) = 'sky2602@gmail.com'");
+            if (rsSky.next()) {
+                int skyId = rsSky.getInt("id");
+                try (PreparedStatement ps = stmt.getConnection().prepareStatement("UPDATE users SET password_hash = ? WHERE id = ?")) {
+                    ps.setString(1, surajHash);
+                    ps.setInt(2, skyId);
+                    ps.executeUpdate();
+                }
+            } else {
+                stmt.executeUpdate(String.format(
+                        "INSERT INTO users (full_name, email, password_hash, role, financial_mode, currency, is_active) " +
+                                "VALUES ('Suraj Jaiswal', 'sky2602@gmail.com', '%s', 'USER', 'TRACK_AND_BUDGET', '₹', TRUE)",
+                        surajHash
+                ));
+                System.out.println(" Seeded user account: sky2602@gmail.com (Pass: suraj123)");
+            }
+
+            // 4. Seed sample savings goals for surajjaiswal566sj@gmail.com if none exist (Matching Images 3, 4, 5)
+            ResultSet rsGoals = stmt.executeQuery("SELECT COUNT(*) FROM savings_goals WHERE user_id = " + surajUserId);
+            if (rsGoals.next() && rsGoals.getInt(1) == 0) {
+                stmt.executeUpdate(String.format(
+                        "INSERT INTO savings_goals (user_id, title, target_amount, saved_amount, emoji, color_theme, status) VALUES " +
+                                "(%d, 'Own House', 1000000.00, 400000.00, '🏠', 'pink', 'ACTIVE'), " +
+                                "(%d, 'Emergency fund', 50000.00, 27000.00, '💰', 'green', 'ACTIVE'), " +
+                                "(%d, 'Dream Car', 500000.00, 100000.00, '🚗', 'yellow', 'ACTIVE')",
+                        surajUserId, surajUserId, surajUserId
+                ));
+                System.out.println(" Seeded sample savings goals for user ID " + surajUserId);
+            }
+
         } catch (Exception e) {
-            System.err.println("Notice while seeding admin: " + e.getMessage());
+            System.err.println("Notice while seeding default users & goals: " + e.getMessage());
         }
     }
 }

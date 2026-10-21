@@ -63,6 +63,7 @@ public class WebServer {
     private final GeminiAiService geminiAiService = new GeminiAiService();
     private final UpiService upiService = new UpiService();
     private final RateLimiter rateLimiter = new RateLimiter();
+    private final GoalService goalService = new GoalService();
 
     // Map token -> User for web sessions
     private static final Map<String, User> activeSessions = new java.util.concurrent.ConcurrentHashMap<>();
@@ -97,6 +98,7 @@ public class WebServer {
         server.createContext("/api/budget", this::handleBudget);
         server.createContext("/api/income", this::handleIncome);
         server.createContext("/api/recurring", this::handleRecurring);
+        server.createContext("/api/goals", this::handleGoals);
         server.createContext("/api/reports/pdf", this::handleReportPdf);
         server.createContext("/api/reports/csv", this::handleReportCsv);
         server.createContext("/api/settings", this::handleSettings);
@@ -820,6 +822,96 @@ public class WebServer {
             }
         } catch (Exception e) {
             sendError(ex, 400, e.getMessage());
+        }
+    }
+
+    // --- Savings Goals Handlers (Images 3, 4, 5) ---
+
+    private void handleGoals(HttpExchange ex) throws IOException {
+        User user = authenticate(ex);
+        if (user == null) {
+            sendError(ex, 401, "Unauthorized");
+            return;
+        }
+        String method = ex.getRequestMethod().toUpperCase();
+        try {
+            if ("GET".equals(method)) {
+                List<Goal> goals = goalService.getGoals(user.getId());
+                Map<String, Object> stats = goalService.getSummary(user.getId());
+                Map<String, Object> resp = new HashMap<>();
+                resp.put("goals", goals);
+                resp.put("stats", stats);
+                sendJsonResponse(ex, 200, resp);
+            } else if ("POST".equals(method)) {
+                JsonObject json = parseJsonBody(ex);
+                String title = json.get("title").getAsString();
+                double targetAmount = json.get("targetAmount").getAsDouble();
+                double savedAmount = json.has("savedAmount") ? json.get("savedAmount").getAsDouble() : 0.0;
+                String emoji = json.has("emoji") ? json.get("emoji").getAsString() : "🎯";
+                String colorTheme = json.has("colorTheme") ? json.get("colorTheme").getAsString() : "green";
+                LocalDate targetDate = null;
+                if (json.has("targetDate") && !json.get("targetDate").isJsonNull() && !json.get("targetDate").getAsString().trim().isEmpty()) {
+                    targetDate = LocalDate.parse(json.get("targetDate").getAsString().trim());
+                }
+
+                Goal created = goalService.createGoal(user.getId(), title, targetAmount, savedAmount, emoji, colorTheme, targetDate);
+                sendJsonResponse(ex, 201, created);
+            } else if ("PUT".equals(method)) {
+                JsonObject json = parseJsonBody(ex);
+                String action = json.has("action") ? json.get("action").getAsString() : "update";
+                if ("addFunds".equals(action)) {
+                    int goalId = json.has("goalId") ? json.get("goalId").getAsInt() : (json.has("id") ? json.get("id").getAsInt() : 0);
+                    double amount = json.get("amount").getAsDouble();
+                    boolean ok = goalService.addFunds(goalId, user.getId(), amount);
+                    if (ok) {
+                        Goal updated = goalService.getGoal(goalId, user.getId());
+                        sendJsonResponse(ex, 200, Map.of("success", true, "goal", updated));
+                    } else {
+                        sendError(ex, 404, "Savings goal not found.");
+                    }
+                    return;
+                }
+
+                int id = json.get("id").getAsInt();
+                String title = json.get("title").getAsString();
+                double targetAmount = json.get("targetAmount").getAsDouble();
+                double savedAmount = json.has("savedAmount") ? json.get("savedAmount").getAsDouble() : 0.0;
+                String emoji = json.has("emoji") ? json.get("emoji").getAsString() : "🎯";
+                String colorTheme = json.has("colorTheme") ? json.get("colorTheme").getAsString() : "green";
+                LocalDate targetDate = null;
+                if (json.has("targetDate") && !json.get("targetDate").isJsonNull() && !json.get("targetDate").getAsString().trim().isEmpty()) {
+                    targetDate = LocalDate.parse(json.get("targetDate").getAsString().trim());
+                }
+
+                boolean ok = goalService.updateGoal(id, user.getId(), title, targetAmount, savedAmount, emoji, colorTheme, targetDate);
+                if (ok) {
+                    Goal updated = goalService.getGoal(id, user.getId());
+                    sendJsonResponse(ex, 200, Map.of("success", true, "goal", updated));
+                } else {
+                    sendError(ex, 404, "Savings goal not found.");
+                }
+            } else if ("DELETE".equals(method)) {
+                Map<String, String> q = parseQuery(ex.getRequestURI().getQuery());
+                int id = 0;
+                if (q.containsKey("id")) {
+                    id = Integer.parseInt(q.get("id"));
+                } else {
+                    JsonObject json = parseJsonBody(ex);
+                    if (json.has("id")) id = json.get("id").getAsInt();
+                }
+                if (id <= 0) {
+                    sendError(ex, 400, "Goal ID is required.");
+                    return;
+                }
+                boolean deleted = goalService.deleteGoal(id, user.getId());
+                sendJsonResponse(ex, 200, Map.of("success", deleted));
+            } else {
+                sendMethodNotAllowed(ex);
+            }
+        } catch (IllegalArgumentException e) {
+            sendError(ex, 400, e.getMessage());
+        } catch (Exception e) {
+            sendError(ex, 500, "Error managing savings goals: " + e.getMessage());
         }
     }
 

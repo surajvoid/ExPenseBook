@@ -58,7 +58,7 @@
                 <button type="button" id="tab-register" class="auth-tab-btn" onclick="switchAuthView('register')">Create Account</button>
             </div>
 
-            <div id="auth-error-box" class="badge badge-coral" style="display: none; margin-bottom: 14px; width: 100%; justify-content: center; padding: 10px; font-size: 0.82rem; border-radius: 10px;"></div>
+            <div id="auth-error-box" class="badge-coral" style="display: none; margin-bottom: 14px; width: 100%; text-align: center; padding: 10px 14px; font-size: 0.82rem; font-weight: 600; border-radius: 10px; white-space: normal !important; word-break: break-word; line-height: 1.45; box-sizing: border-box;"></div>
 
             <!-- 1. SIGN IN VIEW -->
             <div id="view-login">
@@ -233,6 +233,7 @@
                 <li class="nav-item" id="nav-item-budget" onclick="navigate('budget'); closeMobileSidebar();">Budget</li>
                 <li class="nav-item" onclick="navigate('income'); closeMobileSidebar();">Income</li>
                 <li class="nav-item" onclick="navigate('recurring'); closeMobileSidebar();">Recurring</li>
+                <li class="nav-item" id="nav-item-goals" onclick="navigate('goals'); closeMobileSidebar();">🎯 Savings Goals</li>
                 <li class="nav-item" onclick="navigate('reports'); closeMobileSidebar();">Reports</li>
                 <li class="nav-item" onclick="navigate('ai-assistant'); closeMobileSidebar();">✨ AI Assistant</li>
                 <li class="nav-item" onclick="navigate('settings'); closeMobileSidebar();">Settings</li>
@@ -419,6 +420,23 @@
                             </div>
                         </div>
                         <div id="dash-recent-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                    </div>
+
+                    <!-- Savings Goals Section on Dashboard (Images 3, 4, 5) -->
+                    <div class="card" style="margin-top: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+                            <div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 2px;">🎯 Savings Goals</h3>
+                                <span class="text-muted" style="font-size: 0.8rem;">Track progress towards your dreams &amp; milestones</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary btn-small" onclick="openGoalModal()">+ Set Goal</button>
+                                <button class="btn btn-secondary btn-small" onclick="navigate('goals')">View All Goals →</button>
+                            </div>
+                        </div>
+                        <div id="dash-goals-grid" class="goals-grid">
+                            <!-- Populated dynamically -->
+                        </div>
                     </div>
 
                     <!-- Bottom Quote Banner -->
@@ -761,6 +779,48 @@
                             <div id="recurring-list"
                                 style="margin-top: 14px; display: flex; flex-direction: column; gap: 10px;"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- View: Savings Goals (Images 3, 4, 5) -->
+                <div id="view-goals" class="view-panel" style="display: none;">
+                    <!-- Header with quick actions -->
+                    <div class="card" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; padding: 20px 24px;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <h2 style="margin: 0; font-size: 1.45rem; font-weight: 800; color: var(--text-charcoal);">🎯 Savings Goals</h2>
+                                <span class="badge badge-sage" id="goals-count-badge">0 Active</span>
+                            </div>
+                            <p class="text-muted" style="margin: 4px 0 0; font-size: 0.85rem;">Track progress towards your dreams, emergency funds, and financial milestones.</p>
+                        </div>
+                        <button class="btn btn-primary" onclick="openGoalModal()" style="padding: 10px 22px; font-weight: 700; border-radius: 12px; font-size: 0.95rem;">
+                            + Set New Goal
+                        </button>
+                    </div>
+
+                    <!-- Summary Stats Bar -->
+                    <div class="grid-4" style="margin-bottom: 24px; gap: 16px;">
+                        <div class="card" style="padding: 16px 20px; border-left: 4px solid #2D6B50;">
+                            <div class="text-muted" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Total Goals</div>
+                            <div id="stat-total-goals" style="font-size: 1.55rem; font-weight: 800; margin-top: 4px; color: var(--text-charcoal);">0</div>
+                        </div>
+                        <div class="card" style="padding: 16px 20px; border-left: 4px solid #3B82F6;">
+                            <div class="text-muted" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Target Amount</div>
+                            <div id="stat-target-amount" style="font-size: 1.55rem; font-weight: 800; margin-top: 4px; color: #1E40AF;">₹0</div>
+                        </div>
+                        <div class="card" style="padding: 16px 20px; border-left: 4px solid #10B981;">
+                            <div class="text-muted" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Total Saved</div>
+                            <div id="stat-saved-amount" style="font-size: 1.55rem; font-weight: 800; margin-top: 4px; color: #047857;">₹0</div>
+                        </div>
+                        <div class="card" style="padding: 16px 20px; border-left: 4px solid #F59E0B;">
+                            <div class="text-muted" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Overall Progress</div>
+                            <div id="stat-progress-pct" style="font-size: 1.55rem; font-weight: 800; margin-top: 4px; color: #B45309;">0%</div>
+                        </div>
+                    </div>
+
+                    <!-- Goal Cards Grid matching Images 3, 4, 5 -->
+                    <div id="goals-container" class="goals-grid">
+                        <!-- Rendered dynamically -->
                     </div>
                 </div>
 
@@ -1373,6 +1433,138 @@
                         <button type="button" class="btn btn-secondary modal-btn-cancel" onclick="closeAdminEditUserModal()">Cancel</button>
                         <button type="submit" id="btn-save-admin-edit" class="btn btn-primary modal-btn-save">
                             <span>✓</span> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal: Set / Edit Savings Goal -->
+        <div id="modal-goal" class="modal-backdrop" style="display: none;">
+            <div class="modal-content" style="max-width: 480px;">
+                <div class="modal-drag-handle"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 id="modal-goal-heading" style="margin: 0; font-size: 1.25rem; font-weight: 800;">🎯 Set Savings Goal</h3>
+                    <button type="button" onclick="closeGoalModal()"
+                        style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" aria-label="Close">✕</button>
+                </div>
+                <form onsubmit="handleGoalSubmit(event)">
+                    <input type="hidden" id="goal-form-id">
+                    <input type="hidden" id="goal-form-theme" value="pink">
+
+                    <!-- Emoji Selection -->
+                    <div class="form-group">
+                        <label class="form-label">Goal Icon / Emoji</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="goal-form-emoji" class="form-input" value="🏠" style="font-size: 1.5rem; text-align: center; width: 60px; padding: 6px;" maxlength="4" required>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; flex: 1;">
+                                <button type="button" class="btn btn-secondary btn-small" onclick="selectGoalEmoji('🏠')" style="padding: 4px 8px; font-size: 1.1rem;">🏠</button>
+                                <button type="button" class="btn btn-secondary btn-small" onclick="selectGoalEmoji('💰')" style="padding: 4px 8px; font-size: 1.1rem;">💰</button>
+                                <button type="button" class="btn btn-secondary btn-small" onclick="selectGoalEmoji('🚗')" style="padding: 4px 8px; font-size: 1.1rem;">🚗</button>
+                                <button type="button" class="btn btn-secondary btn-small" onclick="selectGoalEmoji('✈️')" style="padding: 4px 8px; font-size: 1.1rem;">✈️</button>
+                                <button type="button" class="btn btn-secondary btn-small" onclick="selectGoalEmoji('💻')" style="padding: 4px 8px; font-size: 1.1rem;">💻</button>
+                                <button type="button" class="btn btn-secondary btn-small" onclick="selectGoalEmoji('💍')" style="padding: 4px 8px; font-size: 1.1rem;">💍</button>
+                                <button type="button" class="btn btn-secondary btn-small" onclick="selectGoalEmoji('📱')" style="padding: 4px 8px; font-size: 1.1rem;">📱</button>
+                                <button type="button" class="btn btn-secondary btn-small" onclick="selectGoalEmoji('🎓')" style="padding: 4px 8px; font-size: 1.1rem;">🎓</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Title -->
+                    <div class="form-group">
+                        <label class="form-label">Goal Title</label>
+                        <input type="text" id="goal-form-title" class="form-input" placeholder="e.g. Own House, Emergency fund, Dream Car" required>
+                    </div>
+
+                    <!-- Target & Saved Amount -->
+                    <div class="form-row-2">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Target Amount (₹)</label>
+                            <input type="number" step="1" min="1" id="goal-form-target" class="form-input" placeholder="10,00,000" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Already Saved (₹)</label>
+                            <input type="number" step="1" min="0" id="goal-form-saved" class="form-input" placeholder="0" value="0">
+                        </div>
+                    </div>
+
+                    <!-- Target Date -->
+                    <div class="form-group" style="margin-top: 14px;">
+                        <label class="form-label">Target Date (Optional)</label>
+                        <input type="date" id="goal-form-date" class="form-input">
+                    </div>
+
+                    <!-- Color Theme Picker matching Images 3, 4, 5 -->
+                    <div class="form-group">
+                        <label class="form-label">Card Pastel Theme</label>
+                        <div class="theme-options-grid">
+                            <button type="button" class="theme-opt-btn selected" id="opt-theme-pink" onclick="selectGoalTheme('pink')" style="background-color: #FBE5EC; color: #8C223A;">
+                                Rose Pink
+                            </button>
+                            <button type="button" class="theme-opt-btn" id="opt-theme-green" onclick="selectGoalTheme('green')" style="background-color: #E5F3EB; color: #185E3B;">
+                                Mint Green
+                            </button>
+                            <button type="button" class="theme-opt-btn" id="opt-theme-yellow" onclick="selectGoalTheme('yellow')" style="background-color: #FFF2D1; color: #8F5400;">
+                                Warm Yellow
+                            </button>
+                            <button type="button" class="theme-opt-btn" id="opt-theme-blue" onclick="selectGoalTheme('blue')" style="background-color: #E2F2FE; color: #0369A1;">
+                                Sky Blue
+                            </button>
+                            <button type="button" class="theme-opt-btn" id="opt-theme-purple" onclick="selectGoalTheme('purple')" style="background-color: #F3E8FF; color: #6B21A8;">
+                                Lavender
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="modal-actions-bar">
+                        <button type="button" class="btn btn-secondary modal-btn-cancel" onclick="closeGoalModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary modal-btn-save" id="goal-btn-submit">
+                            <span>✓</span> Save Goal
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal: Quick Add Money / Deposit to Goal -->
+        <div id="modal-goal-deposit" class="modal-backdrop" style="display: none;">
+            <div class="modal-content" style="max-width: 420px;">
+                <div class="modal-drag-handle"></div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 800;">💰 Add Money to Goal</h3>
+                    <button type="button" onclick="closeDepositModal()"
+                        style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%;" aria-label="Close">✕</button>
+                </div>
+                <form onsubmit="handleDepositSubmit(event)">
+                    <input type="hidden" id="deposit-goal-id">
+
+                    <!-- Goal Summary Banner -->
+                    <div id="deposit-goal-banner" style="background: #F4FAF7; border: 1px solid #C6E8D6; border-radius: 14px; padding: 14px; display: flex; align-items: center; gap: 12px; margin-bottom: 18px;">
+                        <span id="deposit-goal-emoji" style="font-size: 2rem;">🏠</span>
+                        <div>
+                            <div id="deposit-goal-title" style="font-weight: 800; font-size: 1.1rem; color: #111;">Own House</div>
+                            <div id="deposit-goal-progress" style="font-size: 0.82rem; color: #555;">₹4,00,000 saved of ₹10,00,000 (40%)</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Deposit Amount (₹)</label>
+                        <input type="number" step="1" min="1" id="deposit-amount-input" class="form-input" placeholder="e.g. 5000" required style="font-size: 1.3rem; font-weight: 700;">
+                    </div>
+
+                    <!-- Quick amount chips -->
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px;">
+                        <button type="button" class="btn btn-secondary btn-small" onclick="setDepositQuickAmount(500)">+₹500</button>
+                        <button type="button" class="btn btn-secondary btn-small" onclick="setDepositQuickAmount(1000)">+₹1,000</button>
+                        <button type="button" class="btn btn-secondary btn-small" onclick="setDepositQuickAmount(5000)">+₹5,000</button>
+                        <button type="button" class="btn btn-secondary btn-small" onclick="setDepositQuickAmount(10000)">+₹10,000</button>
+                        <button type="button" class="btn btn-secondary btn-small" onclick="setDepositQuickAmount(25000)">+₹25,000</button>
+                    </div>
+
+                    <div class="modal-actions-bar">
+                        <button type="button" class="btn btn-secondary modal-btn-cancel" onclick="closeDepositModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary modal-btn-save">
+                            <span>✓</span> Add to Savings
                         </button>
                     </div>
                 </form>

@@ -208,10 +208,48 @@ public class DataMigrationUtil {
                     }
                 }
 
+                // 3b. Sync Savings Goals
+                try {
+                    String findGoalSql = "SELECT id FROM savings_goals WHERE user_id = ? AND LOWER(title) = LOWER(?)";
+                    String insertGoalSql = "INSERT INTO savings_goals (user_id, title, target_amount, saved_amount, emoji, color_theme, target_date, status, created_at) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    try (Statement srcSt = srcConn.createStatement();
+                         ResultSet srcRs = srcSt.executeQuery("SELECT * FROM savings_goals");
+                         PreparedStatement findGoalPs = targetConn.prepareStatement(findGoalSql);
+                         PreparedStatement insertGoalPs = targetConn.prepareStatement(insertGoalSql)) {
+
+                        while (srcRs.next()) {
+                            int srcUid = srcRs.getInt("user_id");
+                            Integer destUid = userIdMap.get(srcUid);
+                            if (destUid == null) destUid = srcUid;
+
+                            String title = srcRs.getString("title");
+                            findGoalPs.setInt(1, destUid);
+                            findGoalPs.setString(2, title);
+                            try (ResultSet goalExistsRs = findGoalPs.executeQuery()) {
+                                if (!goalExistsRs.next()) {
+                                    insertGoalPs.setInt(1, destUid);
+                                    insertGoalPs.setString(2, title);
+                                    insertGoalPs.setDouble(3, srcRs.getDouble("target_amount"));
+                                    insertGoalPs.setDouble(4, srcRs.getDouble("saved_amount"));
+                                    insertGoalPs.setString(5, srcRs.getString("emoji"));
+                                    insertGoalPs.setString(6, srcRs.getString("color_theme"));
+                                    insertGoalPs.setDate(7, srcRs.getDate("target_date"));
+                                    insertGoalPs.setString(8, srcRs.getString("status"));
+                                    insertGoalPs.setTimestamp(9, srcRs.getTimestamp("created_at"));
+                                    insertGoalPs.executeUpdate();
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // source table might not exist in older sqlite instances
+                }
+
                 // 4. Reset PostgreSQL serial sequences to highest ID so future inserts don't collide
                 if (isPostgres) {
                     try (Statement seqSt = targetConn.createStatement()) {
-                        String[] tables = {"users", "categories", "expenses", "income", "budgets", "category_budgets", "recurring_expenses"};
+                        String[] tables = {"users", "categories", "expenses", "income", "budgets", "category_budgets", "recurring_expenses", "savings_goals"};
                         for (String tbl : tables) {
                             try {
                                 seqSt.execute("SELECT setval(pg_get_serial_sequence('" + tbl + "', 'id'), COALESCE((SELECT MAX(id) FROM " + tbl + "), 1) + 1, false)");

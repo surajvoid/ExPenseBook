@@ -234,6 +234,10 @@ public class UserDAO {
                 ps8.setInt(1, userId);
                 ps8.executeUpdate();
             }
+            try (PreparedStatement psGoals = conn.prepareStatement("DELETE FROM savings_goals WHERE user_id = ?")) {
+                psGoals.setInt(1, userId);
+                psGoals.executeUpdate();
+            }
             boolean deleted;
             try (PreparedStatement ps9 = conn.prepareStatement("DELETE FROM users WHERE id = ?")) {
                 ps9.setInt(1, userId);

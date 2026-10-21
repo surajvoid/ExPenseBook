@@ -332,6 +332,7 @@ async function initApp() {
 }
 
 // --- API Fetch Utility ---
+let isHandling401 = false;
 async function apiFetch(endpoint, options = {}) {
     const headers = options.headers || {};
     if (currentToken) {
@@ -353,7 +354,11 @@ async function apiFetch(endpoint, options = {}) {
         document.documentElement.classList.remove('user-logged-in');
         showAuthUI();
         if (!endpoint.includes('/api/auth/')) {
-            showToast('You were signed out because your session expired or your account was accessed from another device.', 'error');
+            if (!isHandling401) {
+                isHandling401 = true;
+                showToast('You were signed out because your session expired or your account was accessed from another device.', 'error');
+                setTimeout(() => { isHandling401 = false; }, 4000);
+            }
         }
         throw new Error('Session expired or logged in from another device.');
     }
@@ -382,11 +387,17 @@ function showToast(message, type = 'info') {
         document.body.appendChild(container);
     }
 
+    // Deduplicate: Don't show identical toast message if already visible
+    const existing = container.querySelectorAll('.toast-msg-text');
+    for (const el of existing) {
+        if (el.textContent === message) return;
+    }
+
     const toast = document.createElement('div');
     const bg = type === 'error' ? '#C25953' : (type === 'success' ? '#2D6B50' : '#26332F');
     const icon = type === 'error' ? '⚠️' : (type === 'success' ? '✅' : 'ℹ️');
     toast.style.cssText = `background: ${bg}; color: #ffffff; padding: 12px 18px; border-radius: 10px; font-weight: 600; font-size: 0.9rem; box-shadow: 0 10px 30px rgba(0,0,0,0.25); display: flex; align-items: center; gap: 10px; pointer-events: auto; transition: all 0.3s ease;`;
-    toast.innerHTML = `<span>${icon}</span><span style="flex: 1;">${message}</span>`;
+    toast.innerHTML = `<span>${icon}</span><span class="toast-msg-text" style="flex: 1;">${message}</span>`;
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -845,6 +856,9 @@ function navigate(viewName) {
         case 'recurring':
             loadRecurringView();
             break;
+        case 'goals':
+            loadGoalsView();
+            break;
         case 'reports':
             loadReportsView();
             break;
@@ -1193,10 +1207,12 @@ async function loadDashboard() {
         }
 
         renderServerDashboard(data);
+        loadDashboardGoals();
     } catch (e) {
         console.error('Error loading dashboard from server:', e);
         // Offline or server cold-starting: local data already displayed
     }
+    loadDashboardGoals();
 }
 
 function renderDashTrendChart(dailyData) {
@@ -3117,3 +3133,315 @@ async function handleClearAdminAiKey() {
         showToast('Failed to remove Gemini API key: ' + err.message, 'error');
     }
 }
+
+// ========================================================
+// 🎯 SAVINGS GOALS CONTROLLER (Images 3, 4, 5)
+// ========================================================
+
+let currentGoals = [];
+
+function formatIndianNumber(val) {
+    if (val === null || val === undefined || isNaN(val)) return '0';
+    return Number(val).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+}
+
+function renderGoalCardHtml(g) {
+    const theme = g.colorTheme || 'pink';
+    const pct = Math.min(100, Math.max(0, Math.round(g.percentage || (g.targetAmount > 0 ? (g.savedAmount / g.targetAmount) * 100 : 0))));
+    // 2 * PI * 36 ~= 226.2
+    const circumference = 226.2;
+    const offset = circumference * (1 - pct / 100);
+    const curr = (currentUser && currentUser.currency) || '₹';
+
+    let dateBadge = '';
+    if (g.targetDate) {
+        dateBadge = `<div class="goal-date-tag">🎯 Target: ${g.targetDate}</div>`;
+    }
+
+    return `
+    <div class="goal-card goal-card-${theme}" id="goal-card-${g.id}">
+        <div>
+            <div class="goal-emoji">${g.emoji || '🎯'}</div>
+            <h3 class="goal-title">${escapeHtml(g.title)}</h3>
+            <span class="goal-pill">SAVINGS GOAL</span>
+
+            <div class="goal-body">
+                <div class="goal-ring-wrap">
+                    <svg width="86" height="86" viewBox="0 0 86 86">
+                        <circle cx="43" cy="43" r="36" stroke="rgba(0,0,0,0.08)" stroke-width="8" fill="none" />
+                        <circle cx="43" cy="43" r="36" class="goal-ring-stroke" stroke-width="8" stroke-dasharray="226.2" stroke-dashoffset="${offset}" stroke-linecap="round" fill="none" />
+                    </svg>
+                    <div style="position: absolute; font-size: 0.95rem; font-weight: 800; color: #111;">${pct}%</div>
+                </div>
+
+                <div class="goal-amounts-wrap">
+                    <span class="goal-saved-label">saved</span>
+                    <span class="goal-saved-amount">${curr}${formatIndianNumber(g.savedAmount)}</span>
+                    <span class="goal-target-subtext">of ${curr}${formatIndianNumber(g.targetAmount)}</span>
+                    ${dateBadge}
+                </div>
+            </div>
+        </div>
+
+        <div class="goal-actions">
+            <button class="btn-goal-add" onclick="openDepositModal(${g.id})">
+                <span>+</span> Add Money
+            </button>
+            <div style="display: flex; gap: 6px;">
+                <button class="goal-icon-btn" onclick="openGoalModal(${g.id})" title="Edit Goal">✏️</button>
+                <button class="goal-icon-btn" onclick="deleteGoal(${g.id})" title="Delete Goal">🗑️</button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function loadGoalsView() {
+    try {
+        const res = await apiFetch('/api/goals');
+        currentGoals = res.goals || [];
+        const stats = res.stats || {};
+        const curr = (currentUser && currentUser.currency) || '₹';
+
+        // Update Stats Bar
+        const statTotal = document.getElementById('stat-total-goals');
+        const statTarget = document.getElementById('stat-target-amount');
+        const statSaved = document.getElementById('stat-saved-amount');
+        const statPct = document.getElementById('stat-progress-pct');
+        const countBadge = document.getElementById('goals-count-badge');
+
+        const totalGoals = currentGoals.length;
+        const totalTarget = stats.totalTargetAmount || currentGoals.reduce((sum, g) => sum + (parseFloat(g.targetAmount) || 0), 0);
+        const totalSaved = stats.totalSavedAmount || currentGoals.reduce((sum, g) => sum + (parseFloat(g.savedAmount) || 0), 0);
+        const overallPct = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0;
+
+        if (statTotal) statTotal.textContent = totalGoals;
+        if (statTarget) statTarget.textContent = `${curr}${formatIndianNumber(totalTarget)}`;
+        if (statSaved) statSaved.textContent = `${curr}${formatIndianNumber(totalSaved)}`;
+        if (statPct) statPct.textContent = `${overallPct}%`;
+        if (countBadge) countBadge.textContent = `${totalGoals} Active`;
+
+        // Render Goals Container
+        const container = document.getElementById('goals-container');
+        if (!container) return;
+
+        if (currentGoals.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 48px 20px; background: #FAFDFB; border: 2px dashed #D0E5DA; border-radius: 20px;">
+                    <div style="font-size: 3rem; margin-bottom: 12px;">🎯</div>
+                    <h3 style="font-size: 1.25rem; font-weight: 800; color: #1B4332; margin-bottom: 6px;">No Savings Goals Yet</h3>
+                    <p class="text-muted" style="margin-bottom: 20px; max-width: 420px; margin-left: auto; margin-right: auto;">
+                        Start building your dream house, emergency fund, or next vacation by setting your first savings goal.
+                    </p>
+                    <button class="btn btn-primary" onclick="openGoalModal()" style="padding: 10px 24px; font-weight: 700; border-radius: 12px;">
+                        + Set Your First Goal
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = currentGoals.map(renderGoalCardHtml).join('');
+    } catch (err) {
+        console.error('Failed to load savings goals:', err);
+    }
+}
+
+async function loadDashboardGoals() {
+    try {
+        const res = await apiFetch('/api/goals');
+        const goals = res.goals || [];
+        const container = document.getElementById('dash-goals-grid');
+        if (!container) return;
+
+        if (goals.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 24px; background: #F8FAF9; border-radius: 16px;">
+                    <p class="text-muted" style="margin: 0 0 12px 0;">No active savings goals.</p>
+                    <button class="btn btn-secondary btn-small" onclick="openGoalModal()">+ Set a Goal</button>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = goals.slice(0, 3).map(renderGoalCardHtml).join('');
+    } catch (err) {
+        console.warn('Dashboard goals fetch error:', err);
+    }
+}
+
+function selectGoalEmoji(emoji) {
+    const input = document.getElementById('goal-form-emoji');
+    if (input) input.value = emoji;
+}
+
+function selectGoalTheme(theme) {
+    const input = document.getElementById('goal-form-theme');
+    if (input) input.value = theme;
+
+    document.querySelectorAll('.theme-opt-btn').forEach(btn => btn.classList.remove('selected'));
+    const btn = document.getElementById(`opt-theme-${theme}`);
+    if (btn) btn.classList.add('selected');
+}
+
+function openGoalModal(goalId = null) {
+    const modal = document.getElementById('modal-goal');
+    if (!modal) return;
+
+    const idInput = document.getElementById('goal-form-id');
+    const titleInput = document.getElementById('goal-form-title');
+    const targetInput = document.getElementById('goal-form-target');
+    const savedInput = document.getElementById('goal-form-saved');
+    const emojiInput = document.getElementById('goal-form-emoji');
+    const dateInput = document.getElementById('goal-form-date');
+    const heading = document.getElementById('modal-goal-heading');
+
+    if (goalId) {
+        const goal = currentGoals.find(g => g.id === goalId);
+        if (goal) {
+            if (heading) heading.textContent = '✏️ Edit Savings Goal';
+            if (idInput) idInput.value = goal.id;
+            if (titleInput) titleInput.value = goal.title;
+            if (targetInput) targetInput.value = goal.targetAmount;
+            if (savedInput) savedInput.value = goal.savedAmount;
+            if (emojiInput) emojiInput.value = goal.emoji || '🎯';
+            if (dateInput) dateInput.value = goal.targetDate || '';
+            selectGoalTheme(goal.colorTheme || 'pink');
+        }
+    } else {
+        if (heading) heading.textContent = '🎯 Set Savings Goal';
+        if (idInput) idInput.value = '';
+        if (titleInput) titleInput.value = '';
+        if (targetInput) targetInput.value = '';
+        if (savedInput) savedInput.value = '0';
+        if (emojiInput) emojiInput.value = '🏠';
+        if (dateInput) dateInput.value = '';
+        selectGoalTheme('pink');
+    }
+
+    modal.style.display = 'flex';
+}
+
+function closeGoalModal() {
+    const modal = document.getElementById('modal-goal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function handleGoalSubmit(e) {
+    e.preventDefault();
+    const id = document.getElementById('goal-form-id').value;
+    const title = document.getElementById('goal-form-title').value.trim();
+    const targetAmount = parseFloat(document.getElementById('goal-form-target').value);
+    const savedAmount = parseFloat(document.getElementById('goal-form-saved').value) || 0;
+    const emoji = document.getElementById('goal-form-emoji').value.trim() || '🎯';
+    const colorTheme = document.getElementById('goal-form-theme').value || 'pink';
+    const targetDate = document.getElementById('goal-form-date').value || null;
+
+    if (!title || isNaN(targetAmount) || targetAmount <= 0) {
+        showToast('Please enter a valid title and target amount.', 'error');
+        return;
+    }
+
+    try {
+        if (id) {
+            await apiFetch('/api/goals', {
+                method: 'PUT',
+                body: { id: parseInt(id), title, targetAmount, savedAmount, emoji, colorTheme, targetDate }
+            });
+            showToast('Savings goal updated successfully! ✨', 'success');
+        } else {
+            await apiFetch('/api/goals', {
+                method: 'POST',
+                body: { title, targetAmount, savedAmount, emoji, colorTheme, targetDate }
+            });
+            showToast('New savings goal created! 🎯', 'success');
+        }
+
+        closeGoalModal();
+        loadGoalsView();
+        loadDashboardGoals();
+    } catch (err) {
+        showToast('Failed to save goal: ' + err.message, 'error');
+    }
+}
+
+function openDepositModal(goalId) {
+    const goal = currentGoals.find(g => g.id === goalId);
+    if (!goal) return;
+
+    const modal = document.getElementById('modal-goal-deposit');
+    if (!modal) return;
+
+    document.getElementById('deposit-goal-id').value = goal.id;
+    document.getElementById('deposit-goal-emoji').textContent = goal.emoji || '🎯';
+    document.getElementById('deposit-goal-title').textContent = goal.title;
+    const curr = (currentUser && currentUser.currency) || '₹';
+    const pct = Math.min(100, Math.max(0, Math.round(goal.percentage || ((goal.savedAmount / goal.targetAmount) * 100))));
+    document.getElementById('deposit-goal-progress').textContent = `${curr}${formatIndianNumber(goal.savedAmount)} saved of ${curr}${formatIndianNumber(goal.targetAmount)} (${pct}%)`;
+
+    const amtInput = document.getElementById('deposit-amount-input');
+    if (amtInput) amtInput.value = '';
+
+    modal.style.display = 'flex';
+    if (amtInput) amtInput.focus();
+}
+
+function closeDepositModal() {
+    const modal = document.getElementById('modal-goal-deposit');
+    if (modal) modal.style.display = 'none';
+}
+
+function setDepositQuickAmount(amt) {
+    const amtInput = document.getElementById('deposit-amount-input');
+    if (amtInput) {
+        const current = parseFloat(amtInput.value) || 0;
+        amtInput.value = current + amt;
+    }
+}
+
+async function handleDepositSubmit(e) {
+    e.preventDefault();
+    const goalId = parseInt(document.getElementById('deposit-goal-id').value);
+    const amount = parseFloat(document.getElementById('deposit-amount-input').value);
+
+    if (isNaN(amount) || amount <= 0) {
+        showToast('Please enter a valid amount to deposit.', 'error');
+        return;
+    }
+
+    try {
+        await apiFetch('/api/goals', {
+            method: 'PUT',
+            body: { action: 'addFunds', goalId, id: goalId, amount }
+        });
+        showToast(`Deposited ₹${formatIndianNumber(amount)} to your goal! 🎉`, 'success');
+        closeDepositModal();
+        loadGoalsView();
+        loadDashboardGoals();
+    } catch (err) {
+        showToast('Deposit failed: ' + err.message, 'error');
+    }
+}
+
+async function deleteGoal(goalId) {
+    const goal = currentGoals.find(g => g.id === goalId);
+    const title = goal ? goal.title : 'this goal';
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) {
+        return;
+    }
+
+    try {
+        await apiFetch(`/api/goals?id=${goalId}`, { method: 'DELETE' });
+        showToast(`Goal "${title}" deleted.`, 'info');
+        loadGoalsView();
+        loadDashboardGoals();
+    } catch (err) {
+        showToast('Failed to delete goal: ' + err.message, 'error');
+    }
+}
+

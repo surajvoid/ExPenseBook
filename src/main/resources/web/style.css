@@ -2106,3 +2106,258 @@ button:active, .btn:active, .mobile-nav-item:active, .dash-cat-card:active {
     transition: transform 0.08s ease;
 }
 
+/* ========================================================
+   🎯 Savings Goals — Aesthetic Pastel Cards & Rings (Images 3, 4, 5)
+   ======================================================== */
+.goals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+@media (max-width: 600px) {
+    .goals-grid {
+        grid-template-columns: 1fr !important;
+        gap: 16px;
+    }
+}
+
+.goal-card {
+    border-radius: 24px;
+    padding: 24px 22px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.03);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.goal-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.07);
+}
+
+/* 1. Rose Pink Theme (Image 3 - Own House) */
+.goal-card-pink {
+    background-color: #FBE5EC;
+    color: #1A1A1A;
+}
+.goal-card-pink .goal-pill {
+    background-color: #F8C3D3;
+    color: #8C223A;
+}
+.goal-card-pink .goal-ring-stroke {
+    stroke: #E57388;
+}
+
+/* 2. Mint Green Theme (Image 4 - Emergency Fund) */
+.goal-card-green {
+    background-color: #E5F3EB;
+    color: #1A1A1A;
+}
+.goal-card-green .goal-pill {
+    background-color: #C6E8D6;
+    color: #185E3B;
+}
+.goal-card-green .goal-ring-stroke {
+    stroke: #52B788;
+}
+
+/* 3. Warm Yellow/Peach Theme (Image 5 - Dream Car) */
+.goal-card-yellow {
+    background-color: #FFF2D1;
+    color: #1A1A1A;
+}
+.goal-card-yellow .goal-pill {
+    background-color: #FDE29D;
+    color: #8F5400;
+}
+.goal-card-yellow .goal-ring-stroke {
+    stroke: #F4A261;
+}
+
+/* 4. Sky Blue Theme */
+.goal-card-blue {
+    background-color: #E2F2FE;
+    color: #1A1A1A;
+}
+.goal-card-blue .goal-pill {
+    background-color: #BAE6FD;
+    color: #0369A1;
+}
+.goal-card-blue .goal-ring-stroke {
+    stroke: #38BDF8;
+}
+
+/* 5. Soft Lavender Theme */
+.goal-card-purple {
+    background-color: #F3E8FF;
+    color: #1A1A1A;
+}
+.goal-card-purple .goal-pill {
+    background-color: #E9D5FF;
+    color: #6B21A8;
+}
+.goal-card-purple .goal-ring-stroke {
+    stroke: #A855F7;
+}
+
+/* Goal Card Typography & Elements */
+.goal-emoji {
+    font-size: 2.3rem;
+    line-height: 1;
+    margin-bottom: 8px;
+    display: inline-block;
+}
+
+.goal-title {
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #161817;
+    margin: 0 0 6px 0;
+    letter-spacing: -0.4px;
+    word-break: break-word;
+}
+
+.goal-pill {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    margin-bottom: 18px;
+}
+
+.goal-body {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 16px;
+}
+
+.goal-ring-wrap {
+    width: 96px;
+    height: 96px;
+    flex-shrink: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.goal-ring-wrap svg {
+    transform: rotate(-90deg);
+}
+
+.goal-amounts-wrap {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.goal-saved-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.55);
+    margin-bottom: 2px;
+}
+
+.goal-saved-amount {
+    font-size: 1.85rem;
+    font-weight: 900;
+    color: #111111;
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+}
+
+.goal-target-subtext {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.55);
+    margin-top: 2px;
+}
+
+.goal-date-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.5);
+    margin-top: 4px;
+}
+
+/* Card Actions */
+.goal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    padding-top: 14px;
+    margin-top: 4px;
+    gap: 8px;
+}
+
+.btn-goal-add {
+    background: rgba(0, 0, 0, 0.08);
+    border: none;
+    color: #111111;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 7px 16px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-goal-add:hover {
+    background: rgba(0, 0, 0, 0.14);
+    transform: translateY(-1px);
+}
+
+.goal-icon-btn {
+    background: transparent;
+    border: none;
+    color: rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+}
+
+.goal-icon-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #111111;
+}
+
+/* Color theme radio buttons in modal */
+.theme-options-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.theme-opt-btn {
+    border: 2px solid transparent;
+    padding: 10px 4px;
+    border-radius: 12px;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.theme-opt-btn.selected {
+    border-color: #111111;
+    transform: scale(1.04);
+}
+
+
