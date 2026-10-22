@@ -146,6 +146,10 @@ public class DBConnection {
 
             String dbType = config.getProperty("db.type", "mysql").toLowerCase();
             boolean fallback = Boolean.parseBoolean(config.getProperty("db.fallback_to_sqlite", "true"));
+            if (isProduction()) {
+                // In production, fallback to ephemeral SQLite is strictly forbidden
+                fallback = false;
+            }
 
             if ("postgres".equals(dbType) || "postgresql".equals(dbType)) {
                 try {
@@ -202,6 +206,10 @@ public class DBConnection {
                 }
             }
 
+            if (isProduction()) {
+                throw new IllegalStateException("FATAL: Running in production mode (APP_ENV=production) but persistent database connection failed. Silent fallback to ephemeral SQLite is strictly prohibited in production. Please configure MONGODB_URI.");
+            }
+
             // SQLite Fallback or SQLite explicit mode
             Class.forName("org.sqlite.JDBC");
             String sqlitePath = System.getenv("SQLITE_DB_PATH");
@@ -241,6 +249,13 @@ public class DBConnection {
         }
     }
 
+    public static boolean isProduction() {
+        String appEnv = System.getenv("APP_ENV");
+        if (appEnv == null || appEnv.trim().isEmpty()) appEnv = System.getenv("ENV");
+        if (appEnv == null || appEnv.trim().isEmpty()) appEnv = System.getProperty("app.env", "development");
+        return "production".equalsIgnoreCase(appEnv.trim());
+    }
+
     public static boolean isMySQL() {
         return isMySQL;
     }
@@ -250,6 +265,9 @@ public class DBConnection {
     }
 
     public static String getDatabaseStatusText() {
+        if (MongoConnectionManager.isMongoActive()) {
+            return "MongoDB Atlas (Connected)";
+        }
         if ("sqlite".equalsIgnoreCase(config.getProperty("db.type"))) {
             return "SQLite (Local File: expensebook.db)";
         }

@@ -73,8 +73,22 @@ public class WebServer {
     }
 
     public void start() throws IOException {
-        // Initialize Database
-        DBConnection.getConnection();
+        // Initialize Database based on environment mode
+        if (DBConnection.isProduction()) {
+            System.out.println("🛡️ Strict Production Environment (APP_ENV=production)");
+            if (!com.expensebook.util.MongoConnectionManager.isMongoActive()) {
+                System.err.println("❌ FATAL: Running in production mode but MongoDB Atlas is not connected or MONGODB_URI is missing.");
+                System.err.println("❌ Ephemeral SQLite database fallback is strictly prohibited in production to prevent data loss.");
+                System.exit(1);
+            }
+            System.out.println("✅ Authoritative Production Database Verified: MongoDB Atlas is CONNECTED and HEALTHY.");
+        } else {
+            if (com.expensebook.util.MongoConnectionManager.isMongoActive()) {
+                System.out.println("✅ Connected to MongoDB Atlas.");
+            } else {
+                DBConnection.getConnection();
+            }
+        }
 
         server = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
         server.setExecutor(Executors.newFixedThreadPool(16));

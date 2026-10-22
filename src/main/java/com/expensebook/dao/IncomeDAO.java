@@ -2,6 +2,14 @@ package com.expensebook.dao;
 
 import com.expensebook.model.Income;
 import com.expensebook.util.DBConnection;
+import com.expensebook.util.MongoConnectionManager;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Sorts;
+import com.mongodb.client.model.Updates;
+import org.bson.Document;
+import org.bson.conversions.Bson;
 
 import java.sql.Connection;
 import java.sql.Date;
@@ -9,13 +17,33 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Enterprise IncomeDAO supporting dual-mode operation:
+ * Primary: High-performance MongoDB Atlas when active.
+ * Fallback / Dev: Standard JDBC connection for local development.
+ */
 public class IncomeDAO {
 
     public Income addIncome(Income income) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            int id = MongoConnectionManager.getNextSequence("incomeId");
+            income.setId(id);
+            Document doc = new Document("id", id)
+                    .append("userId", income.getUserId())
+                    .append("source", income.getSource())
+                    .append("amount", income.getAmount())
+                    .append("incomeDate", income.getIncomeDate().toString())
+                    .append("description", income.getDescription() != null ? income.getDescription() : "")
+                    .append("createdAt", new java.util.Date());
+            MongoConnectionManager.getCollection("income").insertOne(doc);
+            return income;
+        }
+
         String sql = "INSERT INTO income (user_id, source, amount, income_date, description) VALUES (?, ?, ?, ?, ?)";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -36,6 +64,18 @@ public class IncomeDAO {
     }
 
     public boolean updateIncome(Income income) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            return MongoConnectionManager.getCollection("income").updateOne(
+                    Filters.and(Filters.eq("id", income.getId()), Filters.eq("userId", income.getUserId())),
+                    Updates.combine(
+                            Updates.set("source", income.getSource()),
+                            Updates.set("amount", income.getAmount()),
+                            Updates.set("incomeDate", income.getIncomeDate().toString()),
+                            Updates.set("description", income.getDescription() != null ? income.getDescription() : "")
+                    )
+            ).getModifiedCount() >= 0;
+        }
+
         String sql = "UPDATE income SET source = ?, amount = ?, income_date = ?, description = ? WHERE id = ? AND user_id = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -50,6 +90,12 @@ public class IncomeDAO {
     }
 
     public boolean deleteIncome(int incomeId, int userId) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            return MongoConnectionManager.getCollection("income").deleteOne(
+                    Filters.and(Filters.eq("id", incomeId), Filters.eq("userId", userId))
+            ).getDeletedCount() > 0;
+        }
+
         String sql = "DELETE FROM income WHERE id = ? AND user_id = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -60,6 +106,21 @@ public class IncomeDAO {
     }
 
     public List<Income> getIncomeForUser(int userId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            List<Bson> filters = new ArrayList<>();
+            filters.add(Filters.eq("userId", userId));
+            if (startDate != null) filters.add(Filters.gte("incomeDate", startDate.toString()));
+            if (endDate != null) filters.add(Filters.lte("incomeDate", endDate.toString()));
+
+            List<Income> list = new ArrayList<>();
+            for (Document doc : MongoConnectionManager.getCollection("income")
+                    .find(Filters.and(filters))
+                    .sort(Sorts.descending("incomeDate", "id"))) {
+                list.add(mapMongoIncome(doc));
+            }
+            return list;
+        }
+
         StringBuilder sql = new StringBuilder("SELECT * FROM income WHERE user_id = ? ");
         List<Object> params = new ArrayList<>();
         params.add(userId);
@@ -98,6 +159,20 @@ public class IncomeDAO {
     }
 
     public double getTotalIncome(int userId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            List<Bson> filters = new ArrayList<>();
+            filters.add(Filters.eq("userId", userId));
+            if (startDate != null) filters.add(Filters.gte("incomeDate", startDate.toString()));
+            if (endDate != null) filters.add(Filters.lte("incomeDate", endDate.toString()));
+
+            List<Bson> pipeline = List.of(
+                    Aggregates.match(Filters.and(filters)),
+                    Aggregates.group(null, Accumulators.sum("total", "$amount"))
+            );
+            Document doc = MongoConnectionManager.getCollection("income").aggregate(pipeline).first();
+            return (doc != null && doc.get("total") != null) ? ((Number) doc.get("total")).doubleValue() : 0.0;
+        }
+
         String sql = "SELECT COALESCE(SUM(amount), 0) FROM income WHERE user_id = ? AND income_date >= ? AND income_date <= ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -111,5 +186,23 @@ public class IncomeDAO {
             }
         }
         return 0.0;
+    }
+
+    private Income mapMongoIncome(Document doc) {
+        Income inc = new Income();
+        inc.setId(doc.getInteger("id", 0));
+        inc.setUserId(doc.getInteger("userId", 0));
+        inc.setSource(doc.getString("source"));
+        inc.setAmount(doc.get("amount") != null ? ((Number) doc.get("amount")).doubleValue() : 0.0);
+        String dateStr = doc.getString("incomeDate");
+        if (dateStr != null) {
+            inc.setIncomeDate(LocalDate.parse(dateStr));
+        }
+        inc.setDescription(doc.getString("description"));
+        java.util.Date cd = doc.getDate("createdAt");
+        if (cd != null) {
+            inc.setCreatedAt(new Timestamp(cd.getTime()));
+        }
+        return inc;
     }
 }

@@ -28,9 +28,11 @@ COPY --from=builder --chown=appuser:appgroup /build/target/expensebook-1.0.0.jar
 
 USER appuser
 
-# Environment defaults
+# Environment defaults for Render Web Service
 ENV PORT=8080
-ENV JAVA_OPTS="-Xms128m -Xmx512m -XX:+UseG1GC"
+ENV APP_ENV=production
+ENV MONGODB_DATABASE=expensebook
+ENV JAVA_OPTS="-Xms128m -Xmx400m -XX:+UseG1GC"
 
 EXPOSE 8080
 

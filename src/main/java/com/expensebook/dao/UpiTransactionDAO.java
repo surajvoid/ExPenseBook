@@ -2,22 +2,51 @@ package com.expensebook.dao;
 
 import com.expensebook.model.UpiTransaction;
 import com.expensebook.util.DBConnection;
+import com.expensebook.util.MongoConnectionManager;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Sorts;
+import com.mongodb.client.model.Updates;
+import org.bson.Document;
+import org.bson.conversions.Bson;
 
 import java.sql.*;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Data Access Object for dedicated upi_transactions table.
+ * Enterprise Data Access Object for dedicated upi_transactions collection/table.
  * Strictly separated from ExpenseDAO.
+ * Supports dual-mode operation: MongoDB Atlas primary, JDBC local fallback.
  */
 public class UpiTransactionDAO {
 
     public UpiTransaction save(UpiTransaction txn) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            int id = MongoConnectionManager.getNextSequence("upiId");
+            txn.setId(id);
+            Document doc = new Document("id", id)
+                    .append("userId", txn.getUserId())
+                    .append("amount", txn.getAmount())
+                    .append("merchant", txn.getMerchant())
+                    .append("categoryName", txn.getCategoryName())
+                    .append("sourceApp", txn.getSourceApp())
+                    .append("upiRef", txn.getUpiRef())
+                    .append("isDebit", txn.isDebit())
+                    .append("transactionDate", txn.getTransactionDate().toString())
+                    .append("rawMessage", txn.getRawMessage() != null ? txn.getRawMessage() : "")
+                    .append("importedToExpenseBook", txn.isImportedToExpenseBook())
+                    .append("importedExpenseId", txn.getImportedExpenseId())
+                    .append("createdAt", new java.util.Date());
+
+            MongoConnectionManager.getCollection("upi_transactions").insertOne(doc);
+            return txn;
+        }
+
         String sql = "INSERT INTO upi_transactions (user_id, amount, merchant, category_name, source_app, " +
                 "upi_ref, is_debit, transaction_date, raw_message, imported_to_expensebook, imported_expense_id) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -51,6 +80,18 @@ public class UpiTransactionDAO {
     }
 
     public List<UpiTransaction> findByUserId(int userId, int limit) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            List<UpiTransaction> list = new ArrayList<>();
+            int maxLimit = limit > 0 ? limit : 100;
+            for (Document doc : MongoConnectionManager.getCollection("upi_transactions")
+                    .find(Filters.eq("userId", userId))
+                    .sort(Sorts.descending("transactionDate", "id"))
+                    .limit(maxLimit)) {
+                list.add(mapMongoUpi(doc));
+            }
+            return list;
+        }
+
         List<UpiTransaction> list = new ArrayList<>();
         String sql = "SELECT * FROM upi_transactions WHERE user_id = ? ORDER BY transaction_date DESC, id DESC LIMIT ?";
         Connection conn = DBConnection.getConnection();
@@ -67,6 +108,11 @@ public class UpiTransactionDAO {
     }
 
     public UpiTransaction findById(int id) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            Document doc = MongoConnectionManager.getCollection("upi_transactions").find(Filters.eq("id", id)).first();
+            return doc != null ? mapMongoUpi(doc) : null;
+        }
+
         String sql = "SELECT * FROM upi_transactions WHERE id = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -82,11 +128,20 @@ public class UpiTransactionDAO {
 
     public boolean isDuplicate(int userId, String upiRef) throws SQLException {
         if (upiRef == null || upiRef.trim().isEmpty()) return false;
+        String ref = upiRef.trim();
+
+        if (MongoConnectionManager.isMongoActive()) {
+            Document doc = MongoConnectionManager.getCollection("upi_transactions").find(
+                    Filters.and(Filters.eq("userId", userId), Filters.eq("upiRef", ref))
+            ).first();
+            return doc != null;
+        }
+
         String sql = "SELECT id FROM upi_transactions WHERE user_id = ? AND upi_ref = ? LIMIT 1";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, userId);
-            ps.setString(2, upiRef.trim());
+            ps.setString(2, ref);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next();
             }
@@ -94,6 +149,16 @@ public class UpiTransactionDAO {
     }
 
     public boolean markImported(int upiId, int expenseId) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            return MongoConnectionManager.getCollection("upi_transactions").updateOne(
+                    Filters.eq("id", upiId),
+                    Updates.combine(
+                            Updates.set("importedToExpenseBook", true),
+                            Updates.set("importedExpenseId", expenseId)
+                    )
+            ).getModifiedCount() >= 0;
+        }
+
         String sql = "UPDATE upi_transactions SET imported_to_expensebook = 1, imported_expense_id = ? WHERE id = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -104,6 +169,12 @@ public class UpiTransactionDAO {
     }
 
     public boolean delete(int upiId, int userId) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            return MongoConnectionManager.getCollection("upi_transactions").deleteOne(
+                    Filters.and(Filters.eq("id", upiId), Filters.eq("userId", userId))
+            ).getDeletedCount() > 0;
+        }
+
         String sql = "DELETE FROM upi_transactions WHERE id = ? AND user_id = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -115,6 +186,61 @@ public class UpiTransactionDAO {
 
     public Map<String, Object> getUpiDashboardStats(int userId, LocalDate start, LocalDate end) throws SQLException {
         Map<String, Object> stats = new HashMap<>();
+
+        if (MongoConnectionManager.isMongoActive()) {
+            Bson periodFilter = Filters.and(
+                    Filters.eq("userId", userId),
+                    Filters.eq("isDebit", true),
+                    Filters.gte("transactionDate", start.toString()),
+                    Filters.lte("transactionDate", end.toString())
+            );
+
+            // 1. Total spent & count
+            List<Bson> totalPipe = List.of(
+                    Aggregates.match(periodFilter),
+                    Aggregates.group(null, Accumulators.sum("total", "$amount"), Accumulators.sum("count", 1))
+            );
+            Document totalDoc = MongoConnectionManager.getCollection("upi_transactions").aggregate(totalPipe).first();
+            stats.put("totalUpiSpent", (totalDoc != null && totalDoc.get("total") != null) ? ((Number) totalDoc.get("total")).doubleValue() : 0.0);
+            stats.put("totalUpiCount", (totalDoc != null && totalDoc.get("count") != null) ? totalDoc.getInteger("count", 0) : 0);
+
+            // 2. Spent Today
+            Bson todayFilter = Filters.and(
+                    Filters.eq("userId", userId),
+                    Filters.eq("isDebit", true),
+                    Filters.eq("transactionDate", LocalDate.now().toString())
+            );
+            List<Bson> todayPipe = List.of(
+                    Aggregates.match(todayFilter),
+                    Aggregates.group(null, Accumulators.sum("total", "$amount"))
+            );
+            Document todayDoc = MongoConnectionManager.getCollection("upi_transactions").aggregate(todayPipe).first();
+            stats.put("todayUpiSpent", (todayDoc != null && todayDoc.get("total") != null) ? ((Number) todayDoc.get("total")).doubleValue() : 0.0);
+
+            // 3. App Breakdown
+            Map<String, Double> appTotals = new HashMap<>();
+            List<Bson> appPipe = List.of(
+                    Aggregates.match(periodFilter),
+                    Aggregates.group("$sourceApp", Accumulators.sum("total", "$amount"))
+            );
+            for (Document doc : MongoConnectionManager.getCollection("upi_transactions").aggregate(appPipe)) {
+                String app = doc.getString("_id");
+                if (app != null) {
+                    double amt = doc.get("total") != null ? ((Number) doc.get("total")).doubleValue() : 0.0;
+                    appTotals.put(app, amt);
+                }
+            }
+            stats.put("appBreakdown", appTotals);
+
+            // 4. Imported Count
+            long impCount = MongoConnectionManager.getCollection("upi_transactions").countDocuments(
+                    Filters.and(Filters.eq("userId", userId), Filters.eq("importedToExpenseBook", true))
+            );
+            stats.put("importedCount", (int) impCount);
+
+            return stats;
+        }
+
         Connection conn = DBConnection.getConnection();
 
         // 1. Total UPI Spent in period
@@ -190,6 +316,29 @@ public class UpiTransactionDAO {
         t.setImportedToExpenseBook(rs.getInt("imported_to_expensebook") == 1);
         int impId = rs.getInt("imported_expense_id");
         if (!rs.wasNull()) {
+            t.setImportedExpenseId(impId);
+        }
+        return t;
+    }
+
+    private UpiTransaction mapMongoUpi(Document doc) {
+        UpiTransaction t = new UpiTransaction();
+        t.setId(doc.getInteger("id", 0));
+        t.setUserId(doc.getInteger("userId", 0));
+        t.setAmount(doc.get("amount") != null ? ((Number) doc.get("amount")).doubleValue() : 0.0);
+        t.setMerchant(doc.getString("merchant"));
+        t.setCategoryName(doc.getString("categoryName"));
+        t.setSourceApp(doc.getString("sourceApp"));
+        t.setUpiRef(doc.getString("upiRef"));
+        t.setDebit(doc.getBoolean("isDebit", true));
+        String tdStr = doc.getString("transactionDate");
+        if (tdStr != null) {
+            t.setTransactionDate(LocalDate.parse(tdStr));
+        }
+        t.setRawMessage(doc.getString("rawMessage"));
+        t.setImportedToExpenseBook(doc.getBoolean("importedToExpenseBook", false));
+        Integer impId = doc.getInteger("importedExpenseId");
+        if (impId != null) {
             t.setImportedExpenseId(impId);
         }
         return t;

@@ -4,6 +4,15 @@ import com.expensebook.model.Category;
 import com.expensebook.model.Expense;
 import com.expensebook.model.PaymentMode;
 import com.expensebook.util.DBConnection;
+import com.expensebook.util.MongoConnectionManager;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Sorts;
+import com.mongodb.client.model.Updates;
+import org.bson.Document;
+import org.bson.conversions.Bson;
 
 import java.sql.Connection;
 import java.sql.Date;
@@ -11,15 +20,60 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
+/**
+ * Enterprise ExpenseDAO supporting dual-mode operation:
+ * Primary: High-performance MongoDB Atlas when active.
+ * Fallback / Dev: Standard JDBC connection for local development.
+ */
 public class ExpenseDAO {
 
     public Expense addExpense(Expense expense) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            int id = MongoConnectionManager.getNextSequence("expenseId");
+            expense.setId(id);
+
+            // Fetch category meta if available
+            String catName = expense.getCategoryName();
+            String catIcon = expense.getCategoryIcon();
+            String catColor = expense.getCategoryColor();
+            if ((catName == null || catName.isEmpty()) && expense.getCategoryId() > 0) {
+                Document cDoc = MongoConnectionManager.getCollection("categories")
+                        .find(Filters.eq("id", expense.getCategoryId()))
+                        .first();
+                if (cDoc != null) {
+                    catName = cDoc.getString("name");
+                    catIcon = cDoc.getString("iconName");
+                    catColor = cDoc.getString("color");
+                }
+            }
+            if (catName == null) catName = "Other";
+            if (catIcon == null) catIcon = "OTHERS";
+            if (catColor == null) catColor = "#64748B";
+
+            Document doc = new Document("id", id)
+                    .append("userId", expense.getUserId())
+                    .append("categoryId", expense.getCategoryId())
+                    .append("categoryName", catName)
+                    .append("categoryIcon", catIcon)
+                    .append("categoryColor", catColor)
+                    .append("amount", expense.getAmount())
+                    .append("paymentMode", expense.getPaymentMode() != null ? expense.getPaymentMode().name() : "UPI")
+                    .append("expenseDate", expense.getExpenseDate().toString())
+                    .append("description", expense.getDescription() != null ? expense.getDescription() : "")
+                    .append("createdAt", new java.util.Date());
+
+            MongoConnectionManager.getCollection("expenses").insertOne(doc);
+            return expense;
+        }
+
         String sql = "INSERT INTO expenses (user_id, category_id, amount, payment_mode, expense_date, description) " +
                 "VALUES (?, ?, ?, ?, ?, ?)";
         Connection conn = DBConnection.getConnection();
@@ -42,6 +96,36 @@ public class ExpenseDAO {
     }
 
     public boolean updateExpense(Expense expense) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            String catName = expense.getCategoryName();
+            String catIcon = expense.getCategoryIcon();
+            String catColor = expense.getCategoryColor();
+            if ((catName == null || catName.isEmpty()) && expense.getCategoryId() > 0) {
+                Document cDoc = MongoConnectionManager.getCollection("categories")
+                        .find(Filters.eq("id", expense.getCategoryId()))
+                        .first();
+                if (cDoc != null) {
+                    catName = cDoc.getString("name");
+                    catIcon = cDoc.getString("iconName");
+                    catColor = cDoc.getString("color");
+                }
+            }
+
+            return MongoConnectionManager.getCollection("expenses").updateOne(
+                    Filters.and(Filters.eq("id", expense.getId()), Filters.eq("userId", expense.getUserId())),
+                    Updates.combine(
+                            Updates.set("categoryId", expense.getCategoryId()),
+                            Updates.set("categoryName", catName != null ? catName : "Other"),
+                            Updates.set("categoryIcon", catIcon != null ? catIcon : "OTHERS"),
+                            Updates.set("categoryColor", catColor != null ? catColor : "#64748B"),
+                            Updates.set("amount", expense.getAmount()),
+                            Updates.set("paymentMode", expense.getPaymentMode() != null ? expense.getPaymentMode().name() : "UPI"),
+                            Updates.set("expenseDate", expense.getExpenseDate().toString()),
+                            Updates.set("description", expense.getDescription() != null ? expense.getDescription() : "")
+                    )
+            ).getModifiedCount() >= 0;
+        }
+
         String sql = "UPDATE expenses SET category_id = ?, amount = ?, payment_mode = ?, expense_date = ?, description = ? " +
                 "WHERE id = ? AND user_id = ?";
         Connection conn = DBConnection.getConnection();
@@ -58,6 +142,12 @@ public class ExpenseDAO {
     }
 
     public boolean deleteExpense(int expenseId, int userId) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            return MongoConnectionManager.getCollection("expenses").deleteOne(
+                    Filters.and(Filters.eq("id", expenseId), Filters.eq("userId", userId))
+            ).getDeletedCount() > 0;
+        }
+
         String sql = "DELETE FROM expenses WHERE id = ? AND user_id = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -68,6 +158,11 @@ public class ExpenseDAO {
     }
 
     public Expense getExpenseById(int id) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            Document doc = MongoConnectionManager.getCollection("expenses").find(Filters.eq("id", id)).first();
+            return doc != null ? mapMongoExpense(doc) : null;
+        }
+
         String sql = "SELECT e.*, c.name AS cat_name, c.icon_name AS cat_icon, c.color AS cat_color " +
                 "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id WHERE e.id = ?";
         Connection conn = DBConnection.getConnection();
@@ -84,6 +179,46 @@ public class ExpenseDAO {
 
     public List<Expense> getExpenses(int userId, LocalDate startDate, LocalDate endDate,
                                      Integer categoryId, String paymentMode, String search, String sortBy) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            List<Bson> filters = new ArrayList<>();
+            filters.add(Filters.eq("userId", userId));
+
+            if (startDate != null) {
+                filters.add(Filters.gte("expenseDate", startDate.toString()));
+            }
+            if (endDate != null) {
+                filters.add(Filters.lte("expenseDate", endDate.toString()));
+            }
+            if (categoryId != null && categoryId > 0) {
+                filters.add(Filters.eq("categoryId", categoryId));
+            }
+            if (paymentMode != null && !paymentMode.equalsIgnoreCase("ALL") && !paymentMode.trim().isEmpty()) {
+                filters.add(Filters.eq("paymentMode", paymentMode.trim().toUpperCase()));
+            }
+            if (search != null && !search.trim().isEmpty()) {
+                Pattern pat = Pattern.compile(Pattern.quote(search.trim()), Pattern.CASE_INSENSITIVE);
+                filters.add(Filters.or(Filters.regex("description", pat), Filters.regex("categoryName", pat)));
+            }
+
+            Bson finalFilter = Filters.and(filters);
+            Bson sort;
+            if ("AMOUNT_DESC".equalsIgnoreCase(sortBy) || "Highest Amount".equalsIgnoreCase(sortBy)) {
+                sort = Sorts.descending("amount", "expenseDate");
+            } else if ("AMOUNT_ASC".equalsIgnoreCase(sortBy) || "Lowest Amount".equalsIgnoreCase(sortBy)) {
+                sort = Sorts.ascending("amount");
+            } else if ("DATE_ASC".equalsIgnoreCase(sortBy) || "Oldest".equalsIgnoreCase(sortBy)) {
+                sort = Sorts.ascending("expenseDate", "id");
+            } else {
+                sort = Sorts.descending("expenseDate", "id");
+            }
+
+            List<Expense> list = new ArrayList<>();
+            for (Document doc : MongoConnectionManager.getCollection("expenses").find(finalFilter).sort(sort)) {
+                list.add(mapMongoExpense(doc));
+            }
+            return list;
+        }
+
         StringBuilder sql = new StringBuilder(
                 "SELECT e.*, c.name AS cat_name, c.icon_name AS cat_icon, c.color AS cat_color " +
                         "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id " +
@@ -116,7 +251,6 @@ public class ExpenseDAO {
             params.add(term);
         }
 
-        // Sorting
         if ("AMOUNT_DESC".equalsIgnoreCase(sortBy) || "Highest Amount".equalsIgnoreCase(sortBy)) {
             sql.append("ORDER BY e.amount DESC, e.expense_date DESC ");
         } else if ("AMOUNT_ASC".equalsIgnoreCase(sortBy) || "Lowest Amount".equalsIgnoreCase(sortBy)) {
@@ -124,7 +258,6 @@ public class ExpenseDAO {
         } else if ("DATE_ASC".equalsIgnoreCase(sortBy) || "Oldest".equalsIgnoreCase(sortBy)) {
             sql.append("ORDER BY e.expense_date ASC, e.id ASC ");
         } else {
-            // Default newest
             sql.append("ORDER BY e.expense_date DESC, e.id DESC ");
         }
 
@@ -144,6 +277,20 @@ public class ExpenseDAO {
     }
 
     public double getTotalSpent(int userId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            List<Bson> filters = new ArrayList<>();
+            filters.add(Filters.eq("userId", userId));
+            if (startDate != null) filters.add(Filters.gte("expenseDate", startDate.toString()));
+            if (endDate != null) filters.add(Filters.lte("expenseDate", endDate.toString()));
+
+            List<Bson> pipeline = List.of(
+                    Aggregates.match(Filters.and(filters)),
+                    Aggregates.group(null, Accumulators.sum("total", "$amount"))
+            );
+            Document doc = MongoConnectionManager.getCollection("expenses").aggregate(pipeline).first();
+            return (doc != null && doc.get("total") != null) ? ((Number) doc.get("total")).doubleValue() : 0.0;
+        }
+
         String sql = "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE user_id = ? AND expense_date >= ? AND expense_date <= ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -161,6 +308,10 @@ public class ExpenseDAO {
 
     public double getTodaySpent(int userId) throws SQLException {
         LocalDate today = LocalDate.now();
+        if (MongoConnectionManager.isMongoActive()) {
+            return getTotalSpent(userId, today, today);
+        }
+
         String sql = "SELECT COALESCE(SUM(amount), 0) FROM expenses WHERE user_id = ? AND expense_date = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -176,6 +327,41 @@ public class ExpenseDAO {
     }
 
     public Map<Category, Double> getCategoryWiseSpending(int userId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            List<Bson> filters = new ArrayList<>();
+            filters.add(Filters.eq("userId", userId));
+            if (startDate != null) filters.add(Filters.gte("expenseDate", startDate.toString()));
+            if (endDate != null) filters.add(Filters.lte("expenseDate", endDate.toString()));
+
+            List<Bson> pipeline = List.of(
+                    Aggregates.match(Filters.and(filters)),
+                    Aggregates.group(
+                            "$categoryId",
+                            Accumulators.sum("total", "$amount"),
+                            Accumulators.first("name", "$categoryName"),
+                            Accumulators.first("icon", "$categoryIcon"),
+                            Accumulators.first("color", "$categoryColor")
+                    ),
+                    Aggregates.sort(Sorts.descending("total"))
+            );
+
+            Map<Category, Double> map = new LinkedHashMap<>();
+            for (Document doc : MongoConnectionManager.getCollection("expenses").aggregate(pipeline)) {
+                Category c = new Category();
+                c.setId(doc.getInteger("_id", 0));
+                String name = doc.getString("name");
+                c.setName(name != null ? name : "Other");
+                String icon = doc.getString("icon");
+                c.setIconName(icon != null ? icon : "OTHERS");
+                String color = doc.getString("color");
+                c.setColor(color != null ? color : "#64748B");
+                c.setDefault(true);
+                double total = doc.get("total") != null ? ((Number) doc.get("total")).doubleValue() : 0.0;
+                map.put(c, total);
+            }
+            return map;
+        }
+
         String sql = "SELECT c.id, c.name, c.icon_name, c.color, c.is_default, COALESCE(SUM(e.amount), 0) AS total " +
                 "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id " +
                 "WHERE e.user_id = ? AND e.expense_date >= ? AND e.expense_date <= ? " +
@@ -207,6 +393,27 @@ public class ExpenseDAO {
     }
 
     public Map<String, Double> getPaymentModeSpending(int userId, LocalDate startDate, LocalDate endDate) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            List<Bson> filters = new ArrayList<>();
+            filters.add(Filters.eq("userId", userId));
+            if (startDate != null) filters.add(Filters.gte("expenseDate", startDate.toString()));
+            if (endDate != null) filters.add(Filters.lte("expenseDate", endDate.toString()));
+
+            List<Bson> pipeline = List.of(
+                    Aggregates.match(Filters.and(filters)),
+                    Aggregates.group("$paymentMode", Accumulators.sum("total", "$amount")),
+                    Aggregates.sort(Sorts.descending("total"))
+            );
+
+            Map<String, Double> map = new LinkedHashMap<>();
+            for (Document doc : MongoConnectionManager.getCollection("expenses").aggregate(pipeline)) {
+                String pm = doc.getString("_id");
+                double total = doc.get("total") != null ? ((Number) doc.get("total")).doubleValue() : 0.0;
+                map.put(PaymentMode.fromString(pm).getDisplayName(), total);
+            }
+            return map;
+        }
+
         String sql = "SELECT payment_mode, COALESCE(SUM(amount), 0) AS total " +
                 "FROM expenses " +
                 "WHERE user_id = ? AND expense_date >= ? AND expense_date <= ? " +
@@ -230,18 +437,40 @@ public class ExpenseDAO {
     }
 
     public Map<Integer, Double> getDailySpendingForMonth(int userId, int month, int year) throws SQLException {
-        // Return Map<DayOfMonth, Amount>
         LocalDate start = LocalDate.of(year, month, 1);
         LocalDate end = start.plusMonths(1).minusDays(1);
-
-        String sql = "SELECT expense_date, SUM(amount) as total " +
-                "FROM expenses WHERE user_id = ? AND expense_date >= ? AND expense_date <= ? " +
-                "GROUP BY expense_date ORDER BY expense_date ASC";
 
         Map<Integer, Double> map = new LinkedHashMap<>();
         for (int i = 1; i <= end.getDayOfMonth(); i++) {
             map.put(i, 0.0);
         }
+
+        if (MongoConnectionManager.isMongoActive()) {
+            Bson filter = Filters.and(
+                    Filters.eq("userId", userId),
+                    Filters.gte("expenseDate", start.toString()),
+                    Filters.lte("expenseDate", end.toString())
+            );
+            List<Bson> pipeline = List.of(
+                    Aggregates.match(filter),
+                    Aggregates.group("$expenseDate", Accumulators.sum("total", "$amount")),
+                    Aggregates.sort(Sorts.ascending("_id"))
+            );
+
+            for (Document doc : MongoConnectionManager.getCollection("expenses").aggregate(pipeline)) {
+                String dateStr = doc.getString("_id");
+                if (dateStr != null) {
+                    LocalDate d = LocalDate.parse(dateStr);
+                    double total = doc.get("total") != null ? ((Number) doc.get("total")).doubleValue() : 0.0;
+                    map.put(d.getDayOfMonth(), total);
+                }
+            }
+            return map;
+        }
+
+        String sql = "SELECT expense_date, SUM(amount) as total " +
+                "FROM expenses WHERE user_id = ? AND expense_date >= ? AND expense_date <= ? " +
+                "GROUP BY expense_date ORDER BY expense_date ASC";
 
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -259,13 +488,31 @@ public class ExpenseDAO {
     }
 
     public Map<Integer, Double> getMonthlySpendingForYear(int userId, int year) throws SQLException {
-        // Return Map<MonthNumber (1-12), Amount>
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
 
         Map<Integer, Double> map = new LinkedHashMap<>();
         for (int m = 1; m <= 12; m++) {
             map.put(m, 0.0);
+        }
+
+        if (MongoConnectionManager.isMongoActive()) {
+            Bson filter = Filters.and(
+                    Filters.eq("userId", userId),
+                    Filters.gte("expenseDate", start.toString()),
+                    Filters.lte("expenseDate", end.toString())
+            );
+
+            for (Document doc : MongoConnectionManager.getCollection("expenses").find(filter)) {
+                String dateStr = doc.getString("expenseDate");
+                if (dateStr != null) {
+                    LocalDate d = LocalDate.parse(dateStr);
+                    int m = d.getMonthValue();
+                    double amount = doc.get("amount") != null ? ((Number) doc.get("amount")).doubleValue() : 0.0;
+                    map.put(m, map.get(m) + amount);
+                }
+            }
+            return map;
         }
 
         String sql = "SELECT expense_date, amount FROM expenses " +
@@ -288,6 +535,18 @@ public class ExpenseDAO {
     }
 
     public List<Expense> getExpensesForDate(int userId, LocalDate date) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            Bson filter = Filters.and(
+                    Filters.eq("userId", userId),
+                    Filters.eq("expenseDate", date.toString())
+            );
+            List<Expense> list = new ArrayList<>();
+            for (Document doc : MongoConnectionManager.getCollection("expenses").find(filter).sort(Sorts.descending("id"))) {
+                list.add(mapMongoExpense(doc));
+            }
+            return list;
+        }
+
         String sql = "SELECT e.*, c.name AS cat_name, c.icon_name AS cat_icon, c.color AS cat_color " +
                 "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id " +
                 "WHERE e.user_id = ? AND e.expense_date = ? " +
@@ -308,6 +567,12 @@ public class ExpenseDAO {
     }
 
     public int getTransactionCountForDate(int userId, LocalDate date) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            return (int) MongoConnectionManager.getCollection("expenses").countDocuments(
+                    Filters.and(Filters.eq("userId", userId), Filters.eq("expenseDate", date.toString()))
+            );
+        }
+
         String sql = "SELECT COUNT(*) FROM expenses WHERE user_id = ? AND expense_date = ?";
         Connection conn = DBConnection.getConnection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -323,6 +588,18 @@ public class ExpenseDAO {
     }
 
     public List<Expense> getRecentExpenses(int userId, int limit) throws SQLException {
+        if (MongoConnectionManager.isMongoActive()) {
+            List<Expense> list = new ArrayList<>();
+            Bson sort = Sorts.descending("expenseDate", "id");
+            for (Document doc : MongoConnectionManager.getCollection("expenses")
+                    .find(Filters.eq("userId", userId))
+                    .sort(sort)
+                    .limit(limit)) {
+                list.add(mapMongoExpense(doc));
+            }
+            return list;
+        }
+
         String sql = "SELECT e.*, c.name AS cat_name, c.icon_name AS cat_icon, c.color AS cat_color " +
                 "FROM expenses e LEFT JOIN categories c ON e.category_id = c.id " +
                 "WHERE e.user_id = ? ORDER BY e.expense_date DESC, e.id DESC LIMIT ?";
@@ -362,6 +639,33 @@ public class ExpenseDAO {
             e.setCategory(cat);
         } catch (SQLException ignored) {
         }
+        return e;
+    }
+
+    private Expense mapMongoExpense(Document doc) {
+        Expense e = new Expense();
+        e.setId(doc.getInteger("id", 0));
+        e.setUserId(doc.getInteger("userId", 0));
+        e.setCategoryId(doc.getInteger("categoryId", 0));
+        e.setAmount(doc.get("amount") != null ? ((Number) doc.get("amount")).doubleValue() : 0.0);
+        e.setPaymentMode(PaymentMode.fromString(doc.getString("paymentMode")));
+        String dateStr = doc.getString("expenseDate");
+        if (dateStr != null) {
+            e.setExpenseDate(LocalDate.parse(dateStr));
+        }
+        e.setDescription(doc.getString("description"));
+        java.util.Date cd = doc.getDate("createdAt");
+        if (cd != null) {
+            e.setCreatedAt(new Timestamp(cd.getTime()));
+        }
+        String catName = doc.getString("categoryName");
+        String catIcon = doc.getString("categoryIcon");
+        String catColor = doc.getString("categoryColor");
+        e.setCategoryName(catName != null ? catName : "Other");
+        e.setCategoryIcon(catIcon != null ? catIcon : "OTHERS");
+        e.setCategoryColor(catColor != null ? catColor : "#64748B");
+        Category cat = new Category(e.getCategoryId(), e.getCategoryName(), e.getCategoryIcon(), e.getCategoryColor(), true);
+        e.setCategory(cat);
         return e;
     }
 }
