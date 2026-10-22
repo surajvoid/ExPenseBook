@@ -213,8 +213,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === modal) closeExpenseModal();
         });
     }
+
+    const goalModal = document.getElementById('modal-goal');
+    if (goalModal) {
+        goalModal.addEventListener('click', (e) => {
+            if (e.target === goalModal) closeGoalModal();
+        });
+    }
+
+    const depositModal = document.getElementById('modal-goal-deposit');
+    if (depositModal) {
+        depositModal.addEventListener('click', (e) => {
+            if (e.target === depositModal) closeDepositModal();
+        });
+    }
+
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeExpenseModal();
+        if (e.key === 'Escape') {
+            closeExpenseModal();
+            closeGoalModal();
+            closeDepositModal();
+        }
     });
 
     // Mobile Sidebar Swipe-to-Close Touch Gestures
@@ -3256,6 +3275,7 @@ async function loadDashboardGoals() {
     try {
         const res = await apiFetch('/api/goals');
         const goals = res.goals || [];
+        currentGoals = goals; // Cache goals globally for modal actions
         const container = document.getElementById('dash-goals-grid');
         if (!container) return;
 
@@ -3289,7 +3309,7 @@ function selectGoalTheme(theme) {
     if (btn) btn.classList.add('selected');
 }
 
-function openGoalModal(goalId = null) {
+async function openGoalModal(goalId = null) {
     const modal = document.getElementById('modal-goal');
     if (!modal) return;
 
@@ -3302,7 +3322,15 @@ function openGoalModal(goalId = null) {
     const heading = document.getElementById('modal-goal-heading');
 
     if (goalId) {
-        const goal = currentGoals.find(g => g.id === goalId);
+        let goal = currentGoals.find(g => g.id === goalId);
+        if (!goal) {
+            try {
+                const res = await apiFetch('/api/goals');
+                currentGoals = res.goals || [];
+                goal = currentGoals.find(g => g.id === goalId);
+            } catch (ignored) {}
+        }
+
         if (goal) {
             if (heading) heading.textContent = '✏️ Edit Savings Goal';
             if (idInput) idInput.value = goal.id;
@@ -3324,12 +3352,23 @@ function openGoalModal(goalId = null) {
         selectGoalTheme('pink');
     }
 
+    modal.classList.add('open');
     modal.style.display = 'flex';
+    if (window.innerWidth <= 900) {
+        document.body.style.overflow = 'hidden';
+    }
+    setTimeout(() => {
+        if (titleInput && !goalId) titleInput.focus();
+    }, 60);
 }
 
 function closeGoalModal() {
     const modal = document.getElementById('modal-goal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
 }
 
 async function handleGoalSubmit(e) {
@@ -3345,6 +3384,13 @@ async function handleGoalSubmit(e) {
     if (!title || isNaN(targetAmount) || targetAmount <= 0) {
         showToast('Please enter a valid title and target amount.', 'error');
         return;
+    }
+
+    const submitBtn = document.getElementById('goal-btn-submit');
+    const origHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>⏳</span> Saving...';
     }
 
     try {
@@ -3363,15 +3409,27 @@ async function handleGoalSubmit(e) {
         }
 
         closeGoalModal();
-        loadGoalsView();
-        loadDashboardGoals();
+        await loadGoalsView();
+        await loadDashboardGoals();
     } catch (err) {
         showToast('Failed to save goal: ' + err.message, 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origHtml || '<span>✓</span> Save Goal';
+        }
     }
 }
 
-function openDepositModal(goalId) {
-    const goal = currentGoals.find(g => g.id === goalId);
+async function openDepositModal(goalId) {
+    let goal = currentGoals.find(g => g.id === goalId);
+    if (!goal) {
+        try {
+            const res = await apiFetch('/api/goals');
+            currentGoals = res.goals || [];
+            goal = currentGoals.find(g => g.id === goalId);
+        } catch (ignored) {}
+    }
     if (!goal) return;
 
     const modal = document.getElementById('modal-goal-deposit');
@@ -3387,13 +3445,21 @@ function openDepositModal(goalId) {
     const amtInput = document.getElementById('deposit-amount-input');
     if (amtInput) amtInput.value = '';
 
+    modal.classList.add('open');
     modal.style.display = 'flex';
+    if (window.innerWidth <= 900) {
+        document.body.style.overflow = 'hidden';
+    }
     if (amtInput) amtInput.focus();
 }
 
 function closeDepositModal() {
     const modal = document.getElementById('modal-goal-deposit');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
 }
 
 function setDepositQuickAmount(amt) {
@@ -3414,6 +3480,13 @@ async function handleDepositSubmit(e) {
         return;
     }
 
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const origHtml = submitBtn ? submitBtn.innerHTML : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>⏳</span> Depositing...';
+    }
+
     try {
         await apiFetch('/api/goals', {
             method: 'PUT',
@@ -3421,15 +3494,27 @@ async function handleDepositSubmit(e) {
         });
         showToast(`Deposited ₹${formatIndianNumber(amount)} to your goal! 🎉`, 'success');
         closeDepositModal();
-        loadGoalsView();
-        loadDashboardGoals();
+        await loadGoalsView();
+        await loadDashboardGoals();
     } catch (err) {
         showToast('Deposit failed: ' + err.message, 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = origHtml || 'Deposit Funds';
+        }
     }
 }
 
 async function deleteGoal(goalId) {
-    const goal = currentGoals.find(g => g.id === goalId);
+    let goal = currentGoals.find(g => g.id === goalId);
+    if (!goal) {
+        try {
+            const res = await apiFetch('/api/goals');
+            currentGoals = res.goals || [];
+            goal = currentGoals.find(g => g.id === goalId);
+        } catch (ignored) {}
+    }
     const title = goal ? goal.title : 'this goal';
     if (!confirm(`Are you sure you want to delete "${title}"?`)) {
         return;
@@ -3438,8 +3523,8 @@ async function deleteGoal(goalId) {
     try {
         await apiFetch(`/api/goals?id=${goalId}`, { method: 'DELETE' });
         showToast(`Goal "${title}" deleted.`, 'info');
-        loadGoalsView();
-        loadDashboardGoals();
+        await loadGoalsView();
+        await loadDashboardGoals();
     } catch (err) {
         showToast('Failed to delete goal: ' + err.message, 'error');
     }

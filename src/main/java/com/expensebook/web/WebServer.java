@@ -858,60 +858,103 @@ public class WebServer {
                 sendJsonResponse(ex, 200, resp);
             } else if ("POST".equals(method)) {
                 JsonObject json = parseJsonBody(ex);
-                String title = json.get("title").getAsString();
+                if (!json.has("title") || json.get("title").isJsonNull() || json.get("title").getAsString().trim().isEmpty()) {
+                    sendError(ex, 400, "Goal title cannot be empty.");
+                    return;
+                }
+                if (!json.has("targetAmount") || json.get("targetAmount").isJsonNull() || json.get("targetAmount").getAsDouble() <= 0) {
+                    sendError(ex, 400, "Target amount must be greater than zero.");
+                    return;
+                }
+                String title = json.get("title").getAsString().trim();
                 double targetAmount = json.get("targetAmount").getAsDouble();
-                double savedAmount = json.has("savedAmount") ? json.get("savedAmount").getAsDouble() : 0.0;
-                String emoji = json.has("emoji") ? json.get("emoji").getAsString() : "🎯";
-                String colorTheme = json.has("colorTheme") ? json.get("colorTheme").getAsString() : "green";
+                double savedAmount = (json.has("savedAmount") && !json.get("savedAmount").isJsonNull()) ? json.get("savedAmount").getAsDouble() : 0.0;
+                String emoji = (json.has("emoji") && !json.get("emoji").isJsonNull() && !json.get("emoji").getAsString().trim().isEmpty()) ? json.get("emoji").getAsString().trim() : "🎯";
+                String colorTheme = (json.has("colorTheme") && !json.get("colorTheme").isJsonNull() && !json.get("colorTheme").getAsString().trim().isEmpty()) ? json.get("colorTheme").getAsString().trim() : "pink";
                 LocalDate targetDate = null;
                 if (json.has("targetDate") && !json.get("targetDate").isJsonNull() && !json.get("targetDate").getAsString().trim().isEmpty()) {
-                    targetDate = LocalDate.parse(json.get("targetDate").getAsString().trim());
+                    try {
+                        String s = json.get("targetDate").getAsString().trim();
+                        if (s.contains("T")) s = s.substring(0, s.indexOf("T"));
+                        else if (s.contains(" ")) s = s.substring(0, s.indexOf(" "));
+                        targetDate = LocalDate.parse(s);
+                    } catch (Exception ignored) {}
                 }
 
                 Goal created = goalService.createGoal(user.getId(), title, targetAmount, savedAmount, emoji, colorTheme, targetDate);
                 sendJsonResponse(ex, 201, created);
             } else if ("PUT".equals(method)) {
                 JsonObject json = parseJsonBody(ex);
-                String action = json.has("action") ? json.get("action").getAsString() : "update";
+                String action = (json.has("action") && !json.get("action").isJsonNull()) ? json.get("action").getAsString() : "update";
                 if ("addFunds".equals(action)) {
-                    int goalId = json.has("goalId") ? json.get("goalId").getAsInt() : (json.has("id") ? json.get("id").getAsInt() : 0);
+                    int goalId = 0;
+                    if (json.has("goalId") && !json.get("goalId").isJsonNull()) goalId = json.get("goalId").getAsInt();
+                    else if (json.has("id") && !json.get("id").isJsonNull()) goalId = json.get("id").getAsInt();
+                    
+                    if (goalId <= 0) {
+                        sendError(ex, 400, "Valid goal ID is required.");
+                        return;
+                    }
+                    if (!json.has("amount") || json.get("amount").isJsonNull() || json.get("amount").getAsDouble() <= 0) {
+                        sendError(ex, 400, "Deposit amount must be greater than zero.");
+                        return;
+                    }
                     double amount = json.get("amount").getAsDouble();
                     boolean ok = goalService.addFunds(goalId, user.getId(), amount);
                     if (ok) {
                         Goal updated = goalService.getGoal(goalId, user.getId());
-                        sendJsonResponse(ex, 200, Map.of("success", true, "goal", updated));
+                        sendJsonResponse(ex, 200, Map.of("success", true, "goal", updated != null ? updated : Map.of()));
                     } else {
                         sendError(ex, 404, "Savings goal not found.");
                     }
                     return;
                 }
 
+                if (!json.has("id") || json.get("id").isJsonNull() || json.get("id").getAsInt() <= 0) {
+                    sendError(ex, 400, "Goal ID is required for update.");
+                    return;
+                }
                 int id = json.get("id").getAsInt();
-                String title = json.get("title").getAsString();
+                if (!json.has("title") || json.get("title").isJsonNull() || json.get("title").getAsString().trim().isEmpty()) {
+                    sendError(ex, 400, "Goal title cannot be empty.");
+                    return;
+                }
+                if (!json.has("targetAmount") || json.get("targetAmount").isJsonNull() || json.get("targetAmount").getAsDouble() <= 0) {
+                    sendError(ex, 400, "Target amount must be greater than zero.");
+                    return;
+                }
+                String title = json.get("title").getAsString().trim();
                 double targetAmount = json.get("targetAmount").getAsDouble();
-                double savedAmount = json.has("savedAmount") ? json.get("savedAmount").getAsDouble() : 0.0;
-                String emoji = json.has("emoji") ? json.get("emoji").getAsString() : "🎯";
-                String colorTheme = json.has("colorTheme") ? json.get("colorTheme").getAsString() : "green";
+                double savedAmount = (json.has("savedAmount") && !json.get("savedAmount").isJsonNull()) ? json.get("savedAmount").getAsDouble() : 0.0;
+                String emoji = (json.has("emoji") && !json.get("emoji").isJsonNull() && !json.get("emoji").getAsString().trim().isEmpty()) ? json.get("emoji").getAsString().trim() : "🎯";
+                String colorTheme = (json.has("colorTheme") && !json.get("colorTheme").isJsonNull() && !json.get("colorTheme").getAsString().trim().isEmpty()) ? json.get("colorTheme").getAsString().trim() : "pink";
                 LocalDate targetDate = null;
                 if (json.has("targetDate") && !json.get("targetDate").isJsonNull() && !json.get("targetDate").getAsString().trim().isEmpty()) {
-                    targetDate = LocalDate.parse(json.get("targetDate").getAsString().trim());
+                    try {
+                        String s = json.get("targetDate").getAsString().trim();
+                        if (s.contains("T")) s = s.substring(0, s.indexOf("T"));
+                        else if (s.contains(" ")) s = s.substring(0, s.indexOf(" "));
+                        targetDate = LocalDate.parse(s);
+                    } catch (Exception ignored) {}
                 }
 
                 boolean ok = goalService.updateGoal(id, user.getId(), title, targetAmount, savedAmount, emoji, colorTheme, targetDate);
                 if (ok) {
                     Goal updated = goalService.getGoal(id, user.getId());
-                    sendJsonResponse(ex, 200, Map.of("success", true, "goal", updated));
+                    sendJsonResponse(ex, 200, Map.of("success", true, "goal", updated != null ? updated : Map.of()));
                 } else {
                     sendError(ex, 404, "Savings goal not found.");
                 }
             } else if ("DELETE".equals(method)) {
                 Map<String, String> q = parseQuery(ex.getRequestURI().getQuery());
                 int id = 0;
-                if (q.containsKey("id")) {
-                    id = Integer.parseInt(q.get("id"));
+                if (q.containsKey("id") && !q.get("id").trim().isEmpty()) {
+                    try { id = Integer.parseInt(q.get("id").trim()); } catch (Exception ignored) {}
                 } else {
                     JsonObject json = parseJsonBody(ex);
-                    if (json.has("id")) id = json.get("id").getAsInt();
+                    if (json.has("id") && !json.get("id").isJsonNull()) {
+                        try { id = json.get("id").getAsInt(); } catch (Exception ignored) {}
+                    }
                 }
                 if (id <= 0) {
                     sendError(ex, 400, "Goal ID is required.");
@@ -1308,8 +1351,15 @@ public class WebServer {
 
     private JsonObject parseJsonBody(HttpExchange ex) throws IOException {
         InputStream is = ex.getRequestBody();
-        String text = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        return JsonParser.parseString(text).getAsJsonObject();
+        String text = new String(is.readAllBytes(), StandardCharsets.UTF_8).trim();
+        if (text.isEmpty()) return new JsonObject();
+        try {
+            com.google.gson.JsonElement el = JsonParser.parseString(text);
+            if (el != null && el.isJsonObject()) {
+                return el.getAsJsonObject();
+            }
+        } catch (Exception ignored) {}
+        return new JsonObject();
     }
 
     private Map<String, String> parseQuery(String query) {

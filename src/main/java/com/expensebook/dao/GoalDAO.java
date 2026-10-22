@@ -116,6 +116,14 @@ public class GoalDAO {
                     goal.setId(keys.getInt(1));
                 }
             }
+            if (goal.getId() <= 0 && !DBConnection.isMySQL()) {
+                try (Statement stm = conn.createStatement();
+                     ResultSet rs = stm.executeQuery("SELECT last_insert_rowid()")) {
+                    if (rs.next()) {
+                        goal.setId(rs.getInt(1));
+                    }
+                } catch (Exception ignored) {}
+            }
         }
         return goal;
     }
@@ -262,8 +270,19 @@ public class GoalDAO {
         g.setSavedAmount(rs.getDouble("saved_amount"));
         g.setEmoji(rs.getString("emoji"));
         g.setColorTheme(rs.getString("color_theme"));
-        java.sql.Date d = rs.getDate("target_date");
-        if (d != null) g.setTargetDate(d.toLocalDate());
+        try {
+            java.sql.Date d = rs.getDate("target_date");
+            if (d != null) g.setTargetDate(d.toLocalDate());
+        } catch (Exception ex) {
+            try {
+                String s = rs.getString("target_date");
+                if (s != null && !s.trim().isEmpty()) {
+                    if (s.contains("T")) s = s.substring(0, s.indexOf("T"));
+                    else if (s.contains(" ")) s = s.substring(0, s.indexOf(" "));
+                    g.setTargetDate(LocalDate.parse(s.trim()));
+                }
+            } catch (Exception ignored) {}
+        }
         g.setStatus(rs.getString("status"));
         g.setCreatedAt(rs.getTimestamp("created_at"));
         g.setUpdatedAt(rs.getTimestamp("updated_at"));
@@ -280,8 +299,13 @@ public class GoalDAO {
         g.setEmoji(doc.getString("emoji"));
         g.setColorTheme(doc.getString("colorTheme"));
         String targetDateStr = doc.getString("targetDate");
-        if (targetDateStr != null && !targetDateStr.isEmpty()) {
-            g.setTargetDate(LocalDate.parse(targetDateStr));
+        if (targetDateStr != null && !targetDateStr.trim().isEmpty()) {
+            try {
+                String cleanDate = targetDateStr.trim();
+                if (cleanDate.contains("T")) cleanDate = cleanDate.substring(0, cleanDate.indexOf("T"));
+                else if (cleanDate.contains(" ")) cleanDate = cleanDate.substring(0, cleanDate.indexOf(" "));
+                g.setTargetDate(LocalDate.parse(cleanDate));
+            } catch (Exception ignored) {}
         }
         g.setStatus(doc.getString("status"));
         java.util.Date cd = doc.getDate("createdAt");

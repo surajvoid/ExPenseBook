@@ -664,7 +664,8 @@ h1, h2, h3, h4 {
 }
 
 .modal-backdrop.open,
-.modal-backdrop[style*="display: flex"] {
+.modal-backdrop[style*="display: flex"],
+.modal-backdrop[style*="display:flex"] {
     display: flex !important;
     opacity: 1 !important;
     pointer-events: auto !important;
