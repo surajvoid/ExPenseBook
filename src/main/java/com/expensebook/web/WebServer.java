@@ -1779,9 +1779,9 @@ public class WebServer {
             ex.getResponseHeaders().set("X-XSS-Protection", "1; mode=block");
             ex.getResponseHeaders().set("Referrer-Policy", "strict-origin-when-cross-origin");
 
-            // Cache static assets, but don't cache index.html
-            if (path.endsWith(".html")) {
-                ex.getResponseHeaders().set("Cache-Control", "no-cache, no-store, must-revalidate");
+            // Do not cache html, js, or css aggressively so updates take effect immediately
+            if (path.endsWith(".html") || path.endsWith(".js") || path.endsWith(".css")) {
+                ex.getResponseHeaders().set("Cache-Control", "no-cache, must-revalidate");
             } else {
                 ex.getResponseHeaders().set("Cache-Control", "public, max-age=86400");
             }

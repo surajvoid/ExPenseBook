@@ -3310,6 +3310,12 @@ function selectGoalTheme(theme) {
 }
 
 async function openGoalModal(goalId = null) {
+    if (!currentUser || !currentToken) {
+        showAuthUI();
+        showToast('Please sign in to set savings goals.', 'info');
+        return;
+    }
+
     const modal = document.getElementById('modal-goal');
     if (!modal) return;
 
@@ -3335,8 +3341,8 @@ async function openGoalModal(goalId = null) {
             if (heading) heading.textContent = '✏️ Edit Savings Goal';
             if (idInput) idInput.value = goal.id;
             if (titleInput) titleInput.value = goal.title;
-            if (targetInput) targetInput.value = goal.targetAmount;
-            if (savedInput) savedInput.value = goal.savedAmount;
+            if (targetInput) targetInput.value = formatIndianNumber(goal.targetAmount);
+            if (savedInput) savedInput.value = formatIndianNumber(goal.savedAmount);
             if (emojiInput) emojiInput.value = goal.emoji || '🎯';
             if (dateInput) dateInput.value = goal.targetDate || '';
             selectGoalTheme(goal.colorTheme || 'pink');
@@ -3372,17 +3378,28 @@ function closeGoalModal() {
 }
 
 async function handleGoalSubmit(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const id = document.getElementById('goal-form-id').value;
-    const title = document.getElementById('goal-form-title').value.trim();
-    const targetAmount = parseFloat(document.getElementById('goal-form-target').value);
-    const savedAmount = parseFloat(document.getElementById('goal-form-saved').value) || 0;
-    const emoji = document.getElementById('goal-form-emoji').value.trim() || '🎯';
+    const title = (document.getElementById('goal-form-title').value || '').trim();
+    const rawTarget = (document.getElementById('goal-form-target').value || '').toString().replace(/[^0-9.]/g, '');
+    const targetAmount = parseFloat(rawTarget);
+    const rawSaved = (document.getElementById('goal-form-saved').value || '0').toString().replace(/[^0-9.]/g, '');
+    const savedAmount = parseFloat(rawSaved) || 0;
+    const emoji = (document.getElementById('goal-form-emoji').value || '🎯').trim() || '🎯';
     const colorTheme = document.getElementById('goal-form-theme').value || 'pink';
     const targetDate = document.getElementById('goal-form-date').value || null;
 
-    if (!title || isNaN(targetAmount) || targetAmount <= 0) {
-        showToast('Please enter a valid title and target amount.', 'error');
+    if (!title) {
+        showToast('Please enter a goal title (e.g. Own House, Dream Car).', 'error');
+        const t = document.getElementById('goal-form-title');
+        if (t) t.focus();
+        return;
+    }
+
+    if (isNaN(targetAmount) || targetAmount <= 0) {
+        showToast('Please enter a valid target amount (e.g. 50,000 or 10,00,000).', 'error');
+        const tgt = document.getElementById('goal-form-target');
+        if (tgt) tgt.focus();
         return;
     }
 
@@ -3422,6 +3439,12 @@ async function handleGoalSubmit(e) {
 }
 
 async function openDepositModal(goalId) {
+    if (!currentUser || !currentToken) {
+        showAuthUI();
+        showToast('Please sign in to manage savings goals.', 'info');
+        return;
+    }
+
     let goal = currentGoals.find(g => g.id === goalId);
     if (!goal) {
         try {
@@ -3465,18 +3488,22 @@ function closeDepositModal() {
 function setDepositQuickAmount(amt) {
     const amtInput = document.getElementById('deposit-amount-input');
     if (amtInput) {
-        const current = parseFloat(amtInput.value) || 0;
-        amtInput.value = current + amt;
+        const raw = (amtInput.value || '').toString().replace(/[^0-9.]/g, '');
+        const current = parseFloat(raw) || 0;
+        amtInput.value = formatIndianNumber(current + amt);
     }
 }
 
 async function handleDepositSubmit(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const goalId = parseInt(document.getElementById('deposit-goal-id').value);
-    const amount = parseFloat(document.getElementById('deposit-amount-input').value);
+    const rawAmount = (document.getElementById('deposit-amount-input').value || '').toString().replace(/[^0-9.]/g, '');
+    const amount = parseFloat(rawAmount);
 
     if (isNaN(amount) || amount <= 0) {
         showToast('Please enter a valid amount to deposit.', 'error');
+        const inp = document.getElementById('deposit-amount-input');
+        if (inp) inp.focus();
         return;
     }
 

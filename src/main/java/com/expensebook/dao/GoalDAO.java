@@ -144,7 +144,7 @@ public class GoalDAO {
                             Updates.set("status", st),
                             Updates.set("updatedAt", new java.util.Date())
                     )
-            ).getModifiedCount() >= 0;
+            ).getMatchedCount() > 0;
         }
 
         String sql = "UPDATE savings_goals SET title = ?, target_amount = ?, saved_amount = ?, emoji = ?, color_theme = ?, " +

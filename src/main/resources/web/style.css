@@ -660,6 +660,7 @@ h1, h2, h3, h4 {
     box-sizing: border-box;
     opacity: 0;
     pointer-events: none;
+    visibility: hidden;
     transition: opacity 0.2s ease-in-out;
 }
 
@@ -669,6 +670,7 @@ h1, h2, h3, h4 {
     display: flex !important;
     opacity: 1 !important;
     pointer-events: auto !important;
+    visibility: visible !important;
 }
 
 .modal-content {
