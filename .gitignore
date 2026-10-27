@@ -14,11 +14,17 @@ dependency-reduced-pom.xml
 .vscode/
 *.swp
 
-# Local Database & Secrets
+# Local Database, Backups & Secrets
 expensebook.db
 *.db
+*.db-journal
+*.db-wal
 db.properties
+.env
+.expensebook_secret
 *.log
+backups/
+scratch/
 
 # OS files
 .DS_Store

@@ -5,9 +5,11 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.ReplaceOptions;
 import org.bson.Document;
+import org.bson.types.Decimal128;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.io.File;
+import java.math.BigDecimal;
 import java.sql.*;
 import java.time.LocalDate;
 import java.util.*;
@@ -72,6 +74,13 @@ public class DatabaseToMongoMigration {
                 }
                 executeMigration(mongoUri, mongoDbName, report);
                 System.exit(0);
+            } else if ("resume".equalsIgnoreCase(mode)) {
+                if (mongoUri == null || mongoUri.trim().isEmpty()) {
+                    System.err.println("FATAL: Destination MongoDB URI (--dest-mongo or MONGODB_URI) is required for --mode=resume.");
+                    System.exit(1);
+                }
+                executeResumeMigration(mongoUri, mongoDbName, report);
+                System.exit(0);
             } else if ("verify".equalsIgnoreCase(mode)) {
                 if (mongoUri == null || mongoUri.trim().isEmpty()) {
                     System.err.println("FATAL: Destination MongoDB URI (--dest-mongo or MONGODB_URI) is required for --mode=verify.");
@@ -80,7 +89,7 @@ public class DatabaseToMongoMigration {
                 executeVerification(mongoUri, mongoDbName, report);
                 System.exit(0);
             } else {
-                System.err.println("Unknown mode: " + mode + ". Use --mode=dry-run, --mode=migrate, or --mode=verify.");
+                System.err.println("Unknown mode: " + mode + ". Use --mode=dry-run, --mode=migrate, --mode=resume, or --mode=verify.");
                 System.exit(1);
             }
 
@@ -494,6 +503,7 @@ public class DatabaseToMongoMigration {
                     .append("categoryIcon", e.categoryIcon != null ? e.categoryIcon : "OTHERS")
                     .append("categoryColor", e.categoryColor != null ? e.categoryColor : "#64748B")
                     .append("amount", e.amount)
+                    .append("amountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", e.amount))))
                     .append("paymentMode", e.paymentMode != null ? e.paymentMode : "UPI")
                     .append("expenseDate", e.expenseDate)
                     .append("description", e.description != null ? e.description : "")
@@ -515,6 +525,7 @@ public class DatabaseToMongoMigration {
                     .append("userId", inc.userId)
                     .append("source", inc.source)
                     .append("amount", inc.amount)
+                    .append("amountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", inc.amount))))
                     .append("incomeDate", inc.incomeDate)
                     .append("description", inc.description != null ? inc.description : "")
                     .append("createdAt", inc.createdAt != null ? inc.createdAt : new java.util.Date());
@@ -645,6 +656,246 @@ public class DatabaseToMongoMigration {
         MongoConnectionManager.getCollection("migration_manifest").insertOne(manifest);
 
         System.out.println("\n🎉 MIGRATION COMPLETED SUCCESSFULLY WITH 100% INTEGRITY.");
+    }
+
+    private static void executeResumeMigration(String mongoUri, String dbName, MigrationReport report) {
+        System.out.println("\n🔄 RESUMING MIGRATION TO MONGODB ATLAS (CHECKPOINT-AWARE)...");
+        MongoConnectionManager.initialize(mongoUri, dbName);
+        MongoConnectionManager.ensureIndexes();
+
+        // 1. Resume Users
+        MongoCollection<Document> usersCol = MongoConnectionManager.getCollection("users");
+        int userSkipped = 0, userInserted = 0, maxUserId = 0;
+        for (UserRecord u : report.users.values()) {
+            maxUserId = Math.max(maxUserId, u.canonicalId);
+            if (usersCol.find(Filters.eq("id", u.canonicalId)).first() != null) {
+                userSkipped++;
+                continue;
+            }
+            Document doc = new Document("id", u.canonicalId)
+                    .append("fullName", u.fullName)
+                    .append("email", u.email)
+                    .append("passwordHash", u.passwordHash)
+                    .append("role", u.role != null ? u.role : "USER")
+                    .append("financialMode", u.financialMode != null ? u.financialMode : "TRACK_ONLY")
+                    .append("currency", u.currency != null ? u.currency : "₹")
+                    .append("active", u.active)
+                    .append("isActive", u.active)
+                    .append("currentSessionId", u.currentSessionId)
+                    .append("createdAt", u.createdAt != null ? u.createdAt : new java.util.Date())
+                    .append("migratedFrom", u.sourceDb);
+            usersCol.insertOne(doc);
+            userInserted++;
+        }
+        MongoConnectionManager.setSequenceMinimum("userId", maxUserId);
+        System.out.println("Users: Inserted=" + userInserted + ", Skipped=" + userSkipped + " (Max ID: " + maxUserId + ")");
+
+        // 2. Resume Categories
+        MongoCollection<Document> catCol = MongoConnectionManager.getCollection("categories");
+        int catSkipped = 0, catInserted = 0, maxCatId = 0;
+        for (CategoryRecord c : report.categories) {
+            maxCatId = Math.max(maxCatId, c.canonicalId);
+            if (catCol.find(Filters.eq("id", c.canonicalId)).first() != null) {
+                catSkipped++;
+                continue;
+            }
+            Document doc = new Document("id", c.canonicalId)
+                    .append("userId", c.userId)
+                    .append("name", c.name)
+                    .append("iconName", c.iconName != null ? c.iconName : "OTHERS")
+                    .append("color", c.color != null ? c.color : "#64748B")
+                    .append("isDefault", c.isDefault)
+                    .append("createdAt", c.createdAt != null ? c.createdAt : new java.util.Date());
+            catCol.insertOne(doc);
+            catInserted++;
+        }
+        MongoConnectionManager.setSequenceMinimum("categoryId", maxCatId);
+        System.out.println("Categories: Inserted=" + catInserted + ", Skipped=" + catSkipped + " (Max ID: " + maxCatId + ")");
+
+        // 3. Resume Expenses
+        MongoCollection<Document> expCol = MongoConnectionManager.getCollection("expenses");
+        int expSkipped = 0, expInserted = 0, maxExpId = 0;
+        for (ExpenseRecord e : report.expenses) {
+            maxExpId = Math.max(maxExpId, e.canonicalId);
+            if (expCol.find(Filters.eq("id", e.canonicalId)).first() != null) {
+                expSkipped++;
+                continue;
+            }
+            Document doc = new Document("id", e.canonicalId)
+                    .append("userId", e.userId)
+                    .append("categoryId", e.categoryId)
+                    .append("categoryName", e.categoryName != null ? e.categoryName : "Other")
+                    .append("categoryIcon", e.categoryIcon != null ? e.categoryIcon : "OTHERS")
+                    .append("categoryColor", e.categoryColor != null ? e.categoryColor : "#64748B")
+                    .append("amount", e.amount)
+                    .append("amountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", e.amount))))
+                    .append("paymentMode", e.paymentMode != null ? e.paymentMode : "UPI")
+                    .append("expenseDate", e.expenseDate)
+                    .append("description", e.description != null ? e.description : "")
+                    .append("createdAt", e.createdAt != null ? e.createdAt : new java.util.Date())
+                    .append("sourceDb", e.sourceDb);
+            expCol.insertOne(doc);
+            expInserted++;
+        }
+        MongoConnectionManager.setSequenceMinimum("expenseId", maxExpId);
+        System.out.println("Expenses: Inserted=" + expInserted + ", Skipped=" + expSkipped + " (Max ID: " + maxExpId + ")");
+
+        // 4. Resume Income
+        MongoCollection<Document> incCol = MongoConnectionManager.getCollection("income");
+        int incSkipped = 0, incInserted = 0, maxIncId = 0;
+        for (IncomeRecord inc : report.income) {
+            maxIncId = Math.max(maxIncId, inc.canonicalId);
+            if (incCol.find(Filters.eq("id", inc.canonicalId)).first() != null) {
+                incSkipped++;
+                continue;
+            }
+            Document doc = new Document("id", inc.canonicalId)
+                    .append("userId", inc.userId)
+                    .append("source", inc.source)
+                    .append("amount", inc.amount)
+                    .append("amountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", inc.amount))))
+                    .append("incomeDate", inc.incomeDate)
+                    .append("description", inc.description != null ? inc.description : "")
+                    .append("createdAt", inc.createdAt != null ? inc.createdAt : new java.util.Date());
+            incCol.insertOne(doc);
+            incInserted++;
+        }
+        MongoConnectionManager.setSequenceMinimum("incomeId", maxIncId);
+        System.out.println("Income: Inserted=" + incInserted + ", Skipped=" + incSkipped + " (Max ID: " + maxIncId + ")");
+
+        // 5. Resume Budgets
+        MongoCollection<Document> budCol = MongoConnectionManager.getCollection("budgets");
+        int budSkipped = 0, budInserted = 0, maxBudId = 0;
+        for (BudgetRecord b : report.budgets) {
+            maxBudId = Math.max(maxBudId, b.canonicalId);
+            if (budCol.find(Filters.eq("id", b.canonicalId)).first() != null) {
+                budSkipped++;
+                continue;
+            }
+            List<Document> cbDocs = new ArrayList<>();
+            List<CategoryBudgetRecord> cbs = report.budgetMap.get(b.sourceId);
+            if (cbs != null) {
+                for (CategoryBudgetRecord cb : cbs) {
+                    cbDocs.add(new Document("categoryId", cb.categoryId)
+                            .append("amount", cb.amount)
+                            .append("amountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", cb.amount))))
+                            .append("categoryName", cb.categoryName != null ? cb.categoryName : "Other")
+                            .append("categoryIcon", cb.categoryIcon != null ? cb.categoryIcon : "OTHERS")
+                            .append("categoryColor", cb.categoryColor != null ? cb.categoryColor : "#64748B"));
+                }
+            }
+            Document doc = new Document("id", b.canonicalId)
+                    .append("userId", b.userId)
+                    .append("month", b.month)
+                    .append("year", b.year)
+                    .append("totalBudget", b.totalBudget)
+                    .append("totalBudgetDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", b.totalBudget))))
+                    .append("categoryBudgets", cbDocs)
+                    .append("createdAt", b.createdAt != null ? b.createdAt : new java.util.Date());
+            budCol.insertOne(doc);
+            budInserted++;
+        }
+        MongoConnectionManager.setSequenceMinimum("budgetId", maxBudId);
+        System.out.println("Budgets: Inserted=" + budInserted + ", Skipped=" + budSkipped + " (Max ID: " + maxBudId + ")");
+
+        // 6. Resume Goals
+        MongoCollection<Document> goalsCol = MongoConnectionManager.getCollection("savings_goals");
+        int goalSkipped = 0, goalInserted = 0, maxGoalId = 0;
+        for (GoalRecord g : report.goals) {
+            maxGoalId = Math.max(maxGoalId, g.sourceId);
+            if (goalsCol.find(Filters.eq("id", g.sourceId)).first() != null) {
+                goalSkipped++;
+                continue;
+            }
+            Document doc = new Document("id", g.sourceId)
+                    .append("userId", g.userId)
+                    .append("title", g.title)
+                    .append("targetAmount", g.targetAmount)
+                    .append("targetAmountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", g.targetAmount))))
+                    .append("savedAmount", g.savedAmount)
+                    .append("savedAmountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", g.savedAmount))))
+                    .append("emoji", g.emoji != null ? g.emoji : "🎯")
+                    .append("colorTheme", g.colorTheme != null ? g.colorTheme : "green")
+                    .append("targetDate", g.targetDate)
+                    .append("status", g.status != null ? g.status : "ACTIVE")
+                    .append("createdAt", g.createdAt != null ? g.createdAt : new java.util.Date())
+                    .append("updatedAt", g.updatedAt != null ? g.updatedAt : new java.util.Date());
+            goalsCol.insertOne(doc);
+            goalInserted++;
+        }
+        MongoConnectionManager.setSequenceMinimum("goalId", maxGoalId);
+        System.out.println("Goals: Inserted=" + goalInserted + ", Skipped=" + goalSkipped + " (Max ID: " + maxGoalId + ")");
+
+        // 7. Resume Recurring
+        MongoCollection<Document> recCol = MongoConnectionManager.getCollection("recurring_expenses");
+        int recSkipped = 0, recInserted = 0, maxRecId = 0;
+        for (RecurringRecord r : report.recurring) {
+            maxRecId = Math.max(maxRecId, r.canonicalId);
+            if (recCol.find(Filters.eq("id", r.canonicalId)).first() != null) {
+                recSkipped++;
+                continue;
+            }
+            Document doc = new Document("id", r.canonicalId)
+                    .append("userId", r.userId)
+                    .append("title", r.title)
+                    .append("categoryId", r.categoryId)
+                    .append("categoryName", r.categoryName != null ? r.categoryName : "Other")
+                    .append("categoryIcon", r.categoryIcon != null ? r.categoryIcon : "OTHERS")
+                    .append("categoryColor", r.categoryColor != null ? r.categoryColor : "#64748B")
+                    .append("amount", r.amount)
+                    .append("amountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", r.amount))))
+                    .append("frequency", r.frequency)
+                    .append("paymentMode", r.paymentMode)
+                    .append("nextDueDate", r.nextDueDate)
+                    .append("active", r.active)
+                    .append("isActive", r.active)
+                    .append("createdAt", r.createdAt != null ? r.createdAt : new java.util.Date());
+            recCol.insertOne(doc);
+            recInserted++;
+        }
+        MongoConnectionManager.setSequenceMinimum("recurringId", maxRecId);
+        System.out.println("Recurring: Inserted=" + recInserted + ", Skipped=" + recSkipped + " (Max ID: " + maxRecId + ")");
+
+        // 8. Resume UPI
+        MongoCollection<Document> upiCol = MongoConnectionManager.getCollection("upi_transactions");
+        int upiSkipped = 0, upiInserted = 0, maxUpiId = 0;
+        for (UpiRecord u : report.upiTransactions) {
+            maxUpiId = Math.max(maxUpiId, u.canonicalId);
+            if (upiCol.find(Filters.eq("id", u.canonicalId)).first() != null) {
+                upiSkipped++;
+                continue;
+            }
+            Document doc = new Document("id", u.canonicalId)
+                    .append("userId", u.userId)
+                    .append("amount", u.amount)
+                    .append("amountDecimal", new Decimal128(new BigDecimal(String.format(Locale.US, "%.2f", u.amount))))
+                    .append("merchant", u.merchant)
+                    .append("categoryName", u.categoryName)
+                    .append("sourceApp", u.sourceApp)
+                    .append("upiRef", u.upiRef)
+                    .append("isDebit", u.isDebit)
+                    .append("transactionDate", u.transactionDate)
+                    .append("rawMessage", u.rawMessage)
+                    .append("importedToExpenseBook", u.importedToExpenseBook)
+                    .append("importedExpenseId", u.importedExpenseId)
+                    .append("createdAt", new java.util.Date());
+            upiCol.insertOne(doc);
+            upiInserted++;
+        }
+        MongoConnectionManager.setSequenceMinimum("upiId", maxUpiId);
+        System.out.println("UPI: Inserted=" + upiInserted + ", Skipped=" + upiSkipped + " (Max ID: " + maxUpiId + ")");
+
+        // 9. Save Resume Checkpoint Manifest
+        Document manifest = new Document("timestamp", new java.util.Date())
+                .append("mode", "resume")
+                .append("usersInserted", userInserted)
+                .append("usersSkipped", userSkipped)
+                .append("expensesInserted", expInserted)
+                .append("expensesSkipped", expSkipped)
+                .append("totalExpenseAmount", report.totalExpenseAmount);
+        MongoConnectionManager.getCollection("migration_manifest").insertOne(manifest);
+
+        System.out.println("\n🎉 RESUME MIGRATION COMPLETED.");
     }
 
     private static void executeVerification(String mongoUri, String dbName, MigrationReport report) {

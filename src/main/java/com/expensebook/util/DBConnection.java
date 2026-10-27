@@ -523,17 +523,10 @@ public class DBConnection {
 
     private static void seedDefaultUsers(Statement stmt) {
         try {
-            // 1. Seed or repair admin@expensebook.com (Admin@123)
-            String adminHash = PasswordUtil.hashPassword("Admin@123");
+            // 1. Seed admin@expensebook.com only if missing (never overwrite existing passwords)
             ResultSet rsAdmin = stmt.executeQuery("SELECT id FROM users WHERE LOWER(TRIM(email)) = 'admin@expensebook.com'");
-            if (rsAdmin.next()) {
-                int adminId = rsAdmin.getInt("id");
-                try (PreparedStatement ps = stmt.getConnection().prepareStatement("UPDATE users SET password_hash = ? WHERE id = ?")) {
-                    ps.setString(1, adminHash);
-                    ps.setInt(2, adminId);
-                    ps.executeUpdate();
-                }
-            } else {
+            if (!rsAdmin.next()) {
+                String adminHash = PasswordUtil.hashPassword("Admin@123");
                 stmt.executeUpdate(String.format(
                         "INSERT INTO users (full_name, email, password_hash, role, financial_mode, currency, is_active) " +
                                 "VALUES ('System Admin', 'admin@expensebook.com', '%s', 'ADMIN', 'TRACK_AND_BUDGET', '₹', TRUE)",
@@ -542,18 +535,13 @@ public class DBConnection {
                 System.out.println(" Seeded default administrator account: admin@expensebook.com (Pass: Admin@123)");
             }
 
-            // 2. Seed or repair surajjaiswal566sj@gmail.com (suraj123)
-            String surajHash = PasswordUtil.hashPassword("suraj123");
+            // 2. Seed surajjaiswal566sj@gmail.com only if missing (never overwrite existing passwords)
             ResultSet rsSuraj = stmt.executeQuery("SELECT id FROM users WHERE LOWER(TRIM(email)) = 'surajjaiswal566sj@gmail.com'");
             int surajUserId;
             if (rsSuraj.next()) {
                 surajUserId = rsSuraj.getInt("id");
-                try (PreparedStatement ps = stmt.getConnection().prepareStatement("UPDATE users SET password_hash = ? WHERE id = ?")) {
-                    ps.setString(1, surajHash);
-                    ps.setInt(2, surajUserId);
-                    ps.executeUpdate();
-                }
             } else {
+                String surajHash = PasswordUtil.hashPassword("suraj123");
                 stmt.executeUpdate(String.format(
                         "INSERT INTO users (full_name, email, password_hash, role, financial_mode, currency, is_active) " +
                                 "VALUES ('Suraj Jaiswal', 'surajjaiswal566sj@gmail.com', '%s', 'USER', 'TRACK_AND_BUDGET', '₹', TRUE)",
@@ -564,16 +552,10 @@ public class DBConnection {
                 System.out.println(" Seeded user account: surajjaiswal566sj@gmail.com (Pass: suraj123)");
             }
 
-            // 3. Seed or repair sky2602@gmail.com (suraj123)
+            // 3. Seed sky2602@gmail.com only if missing (never overwrite existing passwords)
             ResultSet rsSky = stmt.executeQuery("SELECT id FROM users WHERE LOWER(TRIM(email)) = 'sky2602@gmail.com'");
-            if (rsSky.next()) {
-                int skyId = rsSky.getInt("id");
-                try (PreparedStatement ps = stmt.getConnection().prepareStatement("UPDATE users SET password_hash = ? WHERE id = ?")) {
-                    ps.setString(1, surajHash);
-                    ps.setInt(2, skyId);
-                    ps.executeUpdate();
-                }
-            } else {
+            if (!rsSky.next()) {
+                String surajHash = PasswordUtil.hashPassword("suraj123");
                 stmt.executeUpdate(String.format(
                         "INSERT INTO users (full_name, email, password_hash, role, financial_mode, currency, is_active) " +
                                 "VALUES ('Suraj Jaiswal', 'sky2602@gmail.com', '%s', 'USER', 'TRACK_AND_BUDGET', '₹', TRUE)",
