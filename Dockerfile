@@ -6,11 +6,8 @@
 FROM maven:3.9.6-eclipse-temurin-21 AS builder
 WORKDIR /build
 
-# Copy pom.xml and download dependencies
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
-
 # Copy full source and build standalone executable uber-jar
+COPY pom.xml .
 COPY src ./src
 RUN mvn clean package -DskipTests
 
