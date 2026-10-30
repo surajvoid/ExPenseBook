@@ -31,6 +31,6 @@ ENV APP_ENV=production
 ENV MONGODB_DATABASE=expensebook
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
 
-EXPOSE 8080
+EXPOSE 8080 7860
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
