@@ -564,17 +564,20 @@ public class DBConnection {
                 System.out.println(" Seeded user account: sky2602@gmail.com (Pass: suraj123)");
             }
 
-            // 4. Seed sample savings goals for surajjaiswal566sj@gmail.com if none exist (Matching Images 3, 4, 5)
-            ResultSet rsGoals = stmt.executeQuery("SELECT COUNT(*) FROM savings_goals WHERE user_id = " + surajUserId);
-            if (rsGoals.next() && rsGoals.getInt(1) == 0) {
-                stmt.executeUpdate(String.format(
-                        "INSERT INTO savings_goals (user_id, title, target_amount, saved_amount, emoji, color_theme, status) VALUES " +
-                                "(%d, 'Own House', 1000000.00, 400000.00, '🏠', 'pink', 'ACTIVE'), " +
-                                "(%d, 'Emergency fund', 50000.00, 27000.00, '💰', 'green', 'ACTIVE'), " +
-                                "(%d, 'Dream Car', 500000.00, 100000.00, '🚗', 'yellow', 'ACTIVE')",
-                        surajUserId, surajUserId, surajUserId
-                ));
-                System.out.println(" Seeded sample savings goals for user ID " + surajUserId);
+            // 4. Clean up any previous sample savings goals (user requested removal of all default set goals)
+            try {
+                int cleanedGoals = stmt.executeUpdate("DELETE FROM savings_goals WHERE title IN ('Own House', 'Emergency fund', 'Dream Car')");
+                if (cleanedGoals > 0) {
+                    System.out.println(" Cleaned up " + cleanedGoals + " sample default savings goals from SQLite.");
+                }
+            } catch (Exception ignored) {}
+
+            if (MongoConnectionManager.isMongoActive()) {
+                try {
+                    MongoConnectionManager.getCollection("savings_goals")
+                            .deleteMany(new org.bson.Document("title", new org.bson.Document("$in", java.util.Arrays.asList("Own House", "Emergency fund", "Dream Car"))));
+                    System.out.println(" Cleaned up sample default savings goals from MongoDB Atlas.");
+                } catch (Exception ignored) {}
             }
 
         } catch (Exception e) {

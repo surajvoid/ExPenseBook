@@ -583,7 +583,6 @@ async function handleLoginSubmit(e) {
             document.documentElement.classList.add('user-logged-in');
             showToast(`Welcome back, ${currentUser.fullName || 'User'}!`, 'success');
             showAppUI();
-            syncExpensesWithServer();
             return;
         }
     } catch (err) {
@@ -655,7 +654,6 @@ async function finalizePersonalization() {
             document.documentElement.classList.add('user-logged-in');
             showToast('Account created successfully! Welcome to ExPense Book.', 'success');
             showAppUI();
-            syncExpensesWithServer();
         }
     } catch (err) {
         if (errBox) {
@@ -787,6 +785,32 @@ async function handleLogout() {
     showAuthUI();
 }
 
+async function toggleFinancialMode() {
+    if (!currentUser || !currentToken) return;
+    const currentMode = currentUser.financialMode || 'TRACK_ONLY';
+    const newMode = (currentMode === 'TRACK_AND_BUDGET') ? 'TRACK_ONLY' : 'TRACK_AND_BUDGET';
+    const label = newMode === 'TRACK_AND_BUDGET' ? 'Track + Budget' : 'Track Only';
+    try {
+        const resp = await apiFetch('/api/settings', {
+            method: 'POST',
+            body: { action: 'switchMode', mode: newMode }
+        });
+        if (resp && resp.user) {
+            currentUser = resp.user;
+            localStorage.setItem('eb_user', JSON.stringify(currentUser));
+            updateUserHeaderAndSidebar();
+            showToast(`Switched mode to ${label}!`, 'success');
+            if (currentView === 'budget' && newMode === 'TRACK_ONLY') {
+                navigate('dashboard');
+            } else if (currentView === 'dashboard') {
+                loadDashboard();
+            }
+        }
+    } catch (err) {
+        showToast('Failed to switch mode: ' + err.message, 'error');
+    }
+}
+
 // --- Navigation & Mode Switching ---
 function updateUserHeaderAndSidebar() {
     if (!currentUser) return;
@@ -799,6 +823,13 @@ function updateUserHeaderAndSidebar() {
     if (modeBadge) {
         modeBadge.textContent = isBudget ? 'Track + Budget' : 'Track Only';
         modeBadge.className = isBudget ? 'badge badge-blue' : 'badge badge-sage';
+        modeBadge.title = isBudget ? 'Click to switch to Track Only' : 'Click to switch to Track + Budget';
+        modeBadge.style.cursor = 'pointer';
+    }
+    const userModeEl = document.getElementById('user-display-mode');
+    if (userModeEl) {
+        userModeEl.title = isBudget ? 'Click to switch to Track Only' : 'Click to switch to Track + Budget';
+        userModeEl.style.cursor = 'pointer';
     }
 
     const budgetNav = document.getElementById('nav-item-budget');
@@ -1205,31 +1236,15 @@ function renderServerDashboard(data) {
 }
 
 async function loadDashboard() {
-    // 1. Instant offline-first render from localStorage
-    const localList = getLocalExpenses();
-    if (localList && localList.length > 0) {
-        renderDashboardFromLocal(localList);
-    }
-
     try {
         const data = await apiFetch('/api/dashboard');
-
-        // Check if server database was wiped (totalSpent == 0) while local items exist
-        if ((!data.totalSpent || data.totalSpent === 0) && localList && localList.length > 0) {
-            console.log('Server reports 0 expenses while local entries exist. Synchronizing...');
-            await syncExpensesWithServer();
-            const refreshed = await apiFetch('/api/dashboard');
-            if (refreshed) {
-                renderServerDashboard(refreshed);
-                return;
-            }
-        }
-
         renderServerDashboard(data);
-        loadDashboardGoals();
     } catch (e) {
         console.error('Error loading dashboard from server:', e);
-        // Offline or server cold-starting: local data already displayed
+        const localList = getLocalExpenses();
+        if (localList && localList.length > 0) {
+            renderDashboardFromLocal(localList);
+        }
     }
     loadDashboardGoals();
 }
@@ -1381,33 +1396,6 @@ async function loadTransactions() {
     const pay = document.getElementById('tx-filter-pay') ? document.getElementById('tx-filter-pay').value : '';
     const sort = document.getElementById('tx-filter-sort') ? document.getElementById('tx-filter-sort').value : 'DATE_DESC';
 
-    // 1. Instant render from local cache
-    const localList = getLocalExpenses();
-    if (localList && localList.length > 0) {
-        let filtered = [...localList];
-        if (search) {
-            const q = search.toLowerCase();
-            filtered = filtered.filter(x => (x.description && x.description.toLowerCase().includes(q)) ||
-                                            (x.categoryName && x.categoryName.toLowerCase().includes(q)));
-        }
-        if (catId) {
-            filtered = filtered.filter(x => String(x.categoryId || (x.category && x.category.id)) === String(catId));
-        }
-        if (pay) {
-            filtered = filtered.filter(x => x.paymentMode === pay);
-        }
-        if (sort === 'DATE_DESC') {
-            filtered.sort((a, b) => (b.expenseDate || '').localeCompare(a.expenseDate || ''));
-        } else if (sort === 'DATE_ASC') {
-            filtered.sort((a, b) => (a.expenseDate || '').localeCompare(b.expenseDate || ''));
-        } else if (sort === 'AMOUNT_DESC') {
-            filtered.sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0));
-        } else if (sort === 'AMOUNT_ASC') {
-            filtered.sort((a, b) => (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0));
-        }
-        renderTransactionsTable(filtered);
-    }
-
     try {
         let url = `/api/expenses?sortBy=${encodeURIComponent(sort)}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
@@ -1416,25 +1404,38 @@ async function loadTransactions() {
 
         const data = await apiFetch(url);
         if (data && data.expenses) {
-            if (data.expenses.length === 0 && localList && localList.length > 0 && !search && !catId && !pay) {
-                console.log('Server reports 0 transactions while local list has items. Syncing...');
-                await syncExpensesWithServer();
-                const refData = await apiFetch(url);
-                if (refData && refData.expenses) {
-                    renderTransactionsTable(refData.expenses);
-                    return;
-                }
-            }
-
             renderTransactionsTable(data.expenses);
-            // If full listing without filters, refresh local storage cache
-            if (!search && !catId && !pay && data.expenses.length > 0) {
+            if (!search && !catId && !pay) {
                 saveLocalExpenses(data.expenses);
             }
         }
     } catch (e) {
         console.error('Error loading transactions from server:', e);
-        // Offline or slow network: local render already displayed items
+        const localList = getLocalExpenses();
+        if (localList && localList.length > 0) {
+            let filtered = [...localList];
+            if (search) {
+                const q = search.toLowerCase();
+                filtered = filtered.filter(x => (x.description && x.description.toLowerCase().includes(q)) ||
+                                                (x.categoryName && x.categoryName.toLowerCase().includes(q)));
+            }
+            if (catId) {
+                filtered = filtered.filter(x => String(x.categoryId || (x.category && x.category.id)) === String(catId));
+            }
+            if (pay) {
+                filtered = filtered.filter(x => x.paymentMode === pay);
+            }
+            if (sort === 'DATE_DESC') {
+                filtered.sort((a, b) => (b.expenseDate || '').localeCompare(a.expenseDate || ''));
+            } else if (sort === 'DATE_ASC') {
+                filtered.sort((a, b) => (a.expenseDate || '').localeCompare(b.expenseDate || ''));
+            } else if (sort === 'AMOUNT_DESC') {
+                filtered.sort((a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0));
+            } else if (sort === 'AMOUNT_ASC') {
+                filtered.sort((a, b) => (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0));
+            }
+            renderTransactionsTable(filtered);
+        }
     }
 }
 
@@ -1563,28 +1564,13 @@ async function handleSaveExpense(e) {
         description
     };
 
-    // 1. Immediately store in client storage so data is NEVER lost
-    if (id) {
-        localItem.id = parseInt(id);
-        updateLocalExpense(localItem);
-    } else {
-        addLocalExpense(localItem);
+    const submitBtn = document.getElementById('modal-btn-submit');
+    const origText = submitBtn ? submitBtn.textContent : '';
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
     }
 
-    // 2. Immediately close modal and refresh active view with 0 lag
-    closeExpenseModal();
-    showToast(id ? 'Expense updated!' : `Expense of ₹${amount.toFixed(2)} recorded! 🎉`, 'success');
-
-    switch (currentView) {
-        case 'dashboard': loadDashboard(); break;
-        case 'transactions': loadTransactions(); break;
-        case 'calendar': loadCalendar(); break;
-        case 'budget': loadBudgetView(); break;
-        case 'analytics': loadAnalytics(); break;
-        default: loadDashboard(); break;
-    }
-
-    // 3. Persist to server in background
     try {
         if (id) {
             payload.id = parseInt(id);
@@ -1592,6 +1578,9 @@ async function handleSaveExpense(e) {
                 method: 'PUT',
                 body: payload
             });
+            localItem.id = parseInt(id);
+            updateLocalExpense(localItem);
+            showToast('Expense updated successfully!', 'success');
         } else {
             const created = await apiFetch('/api/expenses', {
                 method: 'POST',
@@ -1599,11 +1588,28 @@ async function handleSaveExpense(e) {
             });
             if (created && created.id) {
                 localItem.id = created.id;
-                updateLocalExpense(localItem);
+                addLocalExpense(localItem);
             }
+            showToast(`Expense of ₹${amount.toFixed(2)} recorded! 🎉`, 'success');
+        }
+
+        closeExpenseModal();
+
+        switch (currentView) {
+            case 'dashboard': await loadDashboard(); break;
+            case 'transactions': await loadTransactions(); break;
+            case 'calendar': await loadCalendar(); break;
+            case 'budget': await loadBudgetView(); break;
+            case 'analytics': await loadAnalytics(); break;
+            default: await loadDashboard(); break;
         }
     } catch (err) {
-        console.warn('Network sync notice (data is safely preserved in local storage):', err.message);
+        showToast('Failed to save expense: ' + err.message, 'error');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = origText || (id ? 'Update Expense' : 'Save Expense');
+        }
     }
 }
 
@@ -1614,26 +1620,23 @@ function editExpense(exp) {
 async function deleteExpense(id) {
     if (!confirm('Are you sure you want to delete this expense record?')) return;
 
-    // 1. Immediately remove from local storage and update view
-    deleteLocalExpense(id);
-    showToast('Expense deleted successfully.', 'info');
-
-    switch (currentView) {
-        case 'dashboard': loadDashboard(); break;
-        case 'transactions': loadTransactions(); break;
-        case 'calendar': loadCalendar(); break;
-        case 'budget': loadBudgetView(); break;
-        case 'analytics': loadAnalytics(); break;
-        default: loadDashboard(); break;
-    }
-
-    // 2. Delete on server if it's a persisted numeric server ID
-    if (typeof id === 'number' || (typeof id === 'string' && !id.startsWith('temp_') && !id.startsWith('loc_'))) {
-        try {
+    try {
+        if (typeof id === 'number' || (typeof id === 'string' && !id.startsWith('temp_') && !id.startsWith('loc_'))) {
             await apiFetch(`/api/expenses?id=${id}`, { method: 'DELETE' });
-        } catch (err) {
-            console.warn('Server delete sync notice:', err.message);
         }
+        deleteLocalExpense(id);
+        showToast('Expense deleted successfully.', 'info');
+
+        switch (currentView) {
+            case 'dashboard': await loadDashboard(); break;
+            case 'transactions': await loadTransactions(); break;
+            case 'calendar': await loadCalendar(); break;
+            case 'budget': await loadBudgetView(); break;
+            case 'analytics': await loadAnalytics(); break;
+            default: await loadDashboard(); break;
+        }
+    } catch (err) {
+        showToast('Failed to delete expense: ' + err.message, 'error');
     }
 }
 
@@ -3281,15 +3284,25 @@ async function loadDashboardGoals() {
 
         if (goals.length === 0) {
             container.innerHTML = `
-                <div style="grid-column: 1 / -1; text-align: center; padding: 24px; background: #F8FAF9; border-radius: 16px;">
-                    <p class="text-muted" style="margin: 0 0 12px 0;">No active savings goals.</p>
-                    <button class="btn btn-secondary btn-small" onclick="openGoalModal()">+ Set a Goal</button>
+                <div style="grid-column: 1 / -1; text-align: center; padding: 28px 20px; background: #FAFDFB; border: 2px dashed #B8D8C8; border-radius: 20px;">
+                    <div style="font-size: 2.2rem; margin-bottom: 8px;">🎯</div>
+                    <div style="font-weight: 700; font-size: 1.1rem; color: #1B4332; margin-bottom: 4px;">No Savings Goals Set Yet</div>
+                    <p class="text-muted" style="margin: 0 0 16px 0; font-size: 0.85rem;">Set a goal for your emergency fund, car, house, or vacation.</p>
+                    <button class="btn btn-primary" onclick="openGoalModal()" style="padding: 9px 20px; font-weight: 700; border-radius: 10px;">+ Set Your Goal</button>
                 </div>
             `;
             return;
         }
 
-        container.innerHTML = goals.slice(0, 3).map(renderGoalCardHtml).join('');
+        let html = goals.map(renderGoalCardHtml).join('');
+        html += `
+            <div class="card" onclick="openGoalModal()" style="border: 2px dashed #B8D8C8; background: #FAFDFB; border-radius: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; cursor: pointer; transition: all 0.2s ease; text-align: center; padding: 24px;">
+                <div style="width: 50px; height: 50px; border-radius: 50%; background: #E5F3EB; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: #185E3B; margin-bottom: 12px; font-weight: 700;">+</div>
+                <div style="font-weight: 700; font-size: 1rem; color: #1B4332; margin-bottom: 4px;">Set Another Goal</div>
+                <div class="text-muted" style="font-size: 0.8rem;">Emergency fund, Dream Car, House...</div>
+            </div>
+        `;
+        container.innerHTML = html;
     } catch (err) {
         console.warn('Dashboard goals fetch error:', err);
     }

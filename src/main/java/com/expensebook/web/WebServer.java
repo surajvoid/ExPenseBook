@@ -1065,6 +1065,10 @@ public class WebServer {
                 FinancialMode newMode = FinancialMode.fromString(modeStr);
                 userService.switchFinancialMode(user.getId(), newMode);
                 user.setFinancialMode(newMode);
+                String sessionTok = getToken(ex);
+                if (sessionTok != null && activeSessions.containsKey(sessionTok)) {
+                    activeSessions.get(sessionTok).setFinancialMode(newMode);
+                }
                 sendJsonResponse(ex, 200, Map.of("success", true, "user", user));
             }
         } catch (Exception e) {

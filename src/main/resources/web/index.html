@@ -264,7 +264,7 @@
                     <div id="user-display-name"
                         style="font-weight: 700; font-size: 0.85rem; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">
                         User</div>
-                    <div id="user-display-mode" style="font-size: 0.72rem; color: #D4EBE0; font-weight: 700;">Track Only
+                    <div id="user-display-mode" onclick="toggleFinancialMode()" style="font-size: 0.72rem; color: #D4EBE0; font-weight: 700; cursor: pointer; user-select: none;" title="Click to toggle financial mode">Track Only
                     </div>
                 </div>
                 <button class="btn btn-danger btn-small" onclick="handleLogout()" title="Sign Out"
@@ -286,7 +286,7 @@
                 </div>
 
                 <div class="top-navbar-right">
-                    <span id="top-mode-badge" class="badge badge-sage">Track Only</span>
+                    <span id="top-mode-badge" class="badge badge-sage" onclick="toggleFinancialMode()" style="cursor: pointer; user-select: none;" title="Click to toggle financial mode">Track Only</span>
                     <button class="btn btn-primary" onclick="openExpenseModal()">₹ Add Expense</button>
                 </div>
             </header>
@@ -1611,6 +1611,6 @@
     </div> <!-- end app-container -->
 
     <!-- Application Script -->
-    <script src="/app.js?v=12"></script>
+    <script src="/app.js?v=13"></script>
 </body>
 </html>
